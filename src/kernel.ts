@@ -467,6 +467,30 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Check for --flow flag (deterministic YAML flows, no LLM)
+  const flowIdx = process.argv.findIndex((a) => a === "--flow" || a.startsWith("--flow="));
+  if (flowIdx !== -1) {
+    const flowArg = process.argv[flowIdx];
+    const flowFile = flowArg.includes("=")
+      ? flowArg.split("=")[1]
+      : process.argv[flowIdx + 1];
+
+    if (!flowFile) {
+      console.log("Error: --flow requires a YAML file path.");
+      process.exit(1);
+    }
+
+    const { runFlow } = await import("./flow.js");
+    try {
+      const result = await runFlow(flowFile);
+      console.log(`\nResult: ${result.success ? "OK" : "FAILED"} (${result.stepsCompleted}/${result.totalSteps} steps)`);
+      process.exit(result.success ? 0 : 1);
+    } catch (e) {
+      console.log(`Flow Error: ${(e as Error).message}`);
+      process.exit(1);
+    }
+  }
+
   // Check for --workflow flag
   const workflowIdx = process.argv.findIndex((a) => a === "--workflow" || a.startsWith("--workflow="));
   if (workflowIdx !== -1) {

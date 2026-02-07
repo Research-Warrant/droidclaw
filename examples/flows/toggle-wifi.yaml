@@ -1,0 +1,7 @@
+name: Toggle WiFi
+---
+- settings: "wifi"
+- wait: 2
+- tap: "Wi-Fi"
+- wait: 1
+- done: "WiFi toggled"

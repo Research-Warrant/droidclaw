@@ -1,0 +1,14 @@
+appId: com.whatsapp
+name: Send WhatsApp Message
+---
+- home
+- wait: 1
+- launchApp
+- wait: 2
+- tap: "Vi"
+- wait: 1
+- tap: "Message"
+- type: "hello from Droidclaw"
+- tap: "Send"
+- wait: 1
+- done: "Message sent"

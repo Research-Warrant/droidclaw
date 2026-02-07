@@ -1,0 +1,10 @@
+appId: com.google.android.googlequicksearchbox
+name: Google Search
+---
+- launchApp
+- wait: 2
+- tap: "Search"
+- type: "weather today"
+- enter
+- wait: 3
+- done: "Search results loaded"

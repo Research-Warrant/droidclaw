@@ -1,0 +1,8 @@
+name: Clear Notifications
+---
+- shell: "cmd statusbar expand-notifications"
+- wait: 2
+- tap: "Clear all"
+- wait: 1
+- home
+- done: "Notifications cleared"

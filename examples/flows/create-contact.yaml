@@ -1,0 +1,16 @@
+appId: com.google.android.contacts
+name: Create Contact
+---
+- launchApp
+- wait: 2
+- tap: "Create new contact"
+- wait: 1
+- tap: "First name"
+- type: "John"
+- tap: "Last name"
+- type: "Snow"
+- tap: "Phone"
+- type: "5551234567"
+- tap: "Save"
+- wait: 2
+- done: "Contact created"

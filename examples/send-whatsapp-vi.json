@@ -1,0 +1,10 @@
+{
+  "name": "Send WhatsApp to Vi",
+  "steps": [
+    {
+      "app": "com.whatsapp",
+      "goal": "You are on WhatsApp. First check if 'Vi' is visible in the chat list. If it is, tap on it directly. If not, use the Search bar to search for 'Vi' and then tap the result. Once inside the Vi chat, type 'hello from Droidclaw' in the message field and send it.",
+      "maxSteps": 12
+    }
+  ]
+}
