@@ -194,7 +194,7 @@
     .mode-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 32px; }
     .mode-card {
       background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 24px; display: flex; flex-direction: column; transition: border-color .2s;
+      padding: 24px; display: flex; flex-direction: column; transition: border-color .2s; min-width: 0; overflow: hidden;
     }
     .mode-card:hover { border-color: var(--border-hover); }
     .mode-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -230,7 +230,7 @@
     .bento { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px; }
     .bento-card {
       background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 28px; transition: border-color .2s;
+      padding: 28px; transition: border-color .2s; min-width: 0; overflow: hidden;
     }
     .bento-card:hover { border-color: var(--border-hover); }
     .bento-card.wide { grid-column: 1 / -1; }
