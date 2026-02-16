@@ -32,7 +32,7 @@ action: done (412ms)
 
 ## setup
 
-you need **bun**, **adb**, and an api key for any llm provider.
+you need **bun**, **adb**, and either [ollama](https://ollama.com) for local models or an api key for a cloud provider.
 
 ```bash
 # install adb if you don't have it
@@ -42,9 +42,15 @@ bun install
 cp .env.example .env
 ```
 
-edit `.env` - fastest way to start is with groq (free tier):
+edit `.env` - fastest way to start is with ollama (fully local, no api key):
 
 ```bash
+# option a: local with ollama (no api key needed)
+ollama pull llama3.2
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=llama3.2
+
+# option b: cloud with groq (free tier)
 LLM_PROVIDER=groq
 GROQ_API_KEY=gsk_your_key_here
 ```
@@ -189,10 +195,13 @@ name: Send WhatsApp Message
 
 | provider | cost | vision | notes |
 |---|---|---|---|
-| groq | free tier | no | fastest to start |
+| ollama | free (local) | yes* | no api key, runs on your machine |
+| groq | free tier | no | fastest cloud option |
 | openrouter | per token | yes | 200+ models |
 | openai | per token | yes | gpt-4o |
 | bedrock | per token | yes | claude on aws |
+
+*ollama vision requires a vision model like `llama3.2-vision` or `llava`
 
 ## config
 
@@ -221,7 +230,7 @@ src/
   skills.ts          6 multi-step skills
   workflow.ts        workflow orchestration
   flow.ts            yaml flow runner
-  llm-providers.ts   4 providers + system prompt
+  llm-providers.ts   5 providers + system prompt
   sanitizer.ts       accessibility xml parser
   config.ts          env config
   constants.ts       keycodes, coordinates

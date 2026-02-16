@@ -13,6 +13,7 @@ import {
   DEFAULT_GROQ_MODEL,
   DEFAULT_OPENAI_MODEL,
   DEFAULT_BEDROCK_MODEL,
+  DEFAULT_OLLAMA_MODEL,
   DEFAULT_MAX_RETRIES,
   DEFAULT_STUCK_THRESHOLD,
   DEFAULT_MAX_ELEMENTS,
@@ -56,7 +57,7 @@ export const Config = {
   // Streaming responses
   STREAMING_ENABLED: env("STREAMING_ENABLED", String(DEFAULT_STREAMING_ENABLED)) === "true",
 
-  // LLM Provider: "groq", "openai", "bedrock", or "openrouter"
+  // LLM Provider: "groq", "openai", "bedrock", "openrouter", or "ollama"
   LLM_PROVIDER: env("LLM_PROVIDER", "groq"),
 
   // Groq Configuration
@@ -75,11 +76,16 @@ export const Config = {
   OPENROUTER_API_KEY: env("OPENROUTER_API_KEY"),
   OPENROUTER_MODEL: env("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet"),
 
+  // Ollama Configuration (local LLMs, no API key needed)
+  OLLAMA_BASE_URL: env("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+  OLLAMA_MODEL: env("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL),
+
   getModel(): string {
     const provider = Config.LLM_PROVIDER;
     if (provider === "groq") return Config.GROQ_MODEL;
     if (provider === "bedrock") return Config.BEDROCK_MODEL;
     if (provider === "openrouter") return Config.OPENROUTER_MODEL;
+    if (provider === "ollama") return Config.OLLAMA_MODEL;
     return Config.OPENAI_MODEL;
   },
 

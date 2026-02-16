@@ -1,6 +1,6 @@
 /**
  * LLM Provider module for DroidClaw.
- * Supports OpenAI, Groq, AWS Bedrock, and OpenRouter (via Vercel AI SDK).
+ * Supports OpenAI, Groq, AWS Bedrock, OpenRouter (via Vercel AI SDK), and Ollama (local).
  *
  * Phase 3: Real multimodal vision (image content parts)
  * Phase 4A: Multi-turn conversation memory (ChatMessage[] interface)
@@ -20,6 +20,7 @@ import { z } from "zod";
 import { Config } from "./config.js";
 import {
   GROQ_API_BASE_URL,
+  OLLAMA_API_BASE_URL,
   BEDROCK_ANTHROPIC_MODELS,
   BEDROCK_META_MODELS,
 } from "./constants.js";
@@ -265,6 +266,14 @@ class OpenAIProvider implements LLMProvider {
       });
       this.model = Config.GROQ_MODEL;
       this.capabilities = { supportsImages: false, supportsStreaming: true };
+    } else if (Config.LLM_PROVIDER === "ollama") {
+      this.client = new OpenAI({
+        apiKey: "ollama", // required by the SDK but ignored by Ollama
+        baseURL: Config.OLLAMA_BASE_URL,
+      });
+      this.model = Config.OLLAMA_MODEL;
+      // Vision models (llava, llama3.2-vision, etc.) support images
+      this.capabilities = { supportsImages: true, supportsStreaming: true };
     } else {
       this.client = new OpenAI({ apiKey: Config.OPENAI_API_KEY });
       this.model = Config.OPENAI_MODEL;
@@ -646,5 +655,6 @@ export function getLlmProvider(): LLMProvider {
   if (Config.LLM_PROVIDER === "openrouter") {
     return new OpenRouterProvider();
   }
+  // OpenAI, Groq, and Ollama all use OpenAI-compatible API
   return new OpenAIProvider();
 }

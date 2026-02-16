@@ -27,14 +27,14 @@ Seven source files in `src/`, no subdirectories:
 
 - **kernel.ts** — Entry point and main agent loop. Reads goal from stdin, runs up to MAX_STEPS iterations of: capture screen → diff with previous → call LLM → execute action → track history. Handles stuck-loop detection and vision fallback when the accessibility tree is empty.
 - **actions.ts** — 15 action implementations (tap, type, enter, swipe, home, back, wait, done, longpress, screenshot, launch, clear, clipboard_get, clipboard_set, shell). Each wraps ADB commands via `Bun.spawnSync()`. `runAdbCommand()` provides exponential backoff retry.
-- **llm-providers.ts** — LLM abstraction with `LLMProvider` interface and factory (`getLlmProvider()`). Four providers: OpenAI, Groq (OpenAI-compatible endpoint), AWS Bedrock (Anthropic + Meta model formats), OpenRouter (Vercel AI SDK). Contains the full SYSTEM_PROMPT with all 15 action definitions and rules.
+- **llm-providers.ts** — LLM abstraction with `LLMProvider` interface and factory (`getLlmProvider()`). Five providers: OpenAI, Groq (OpenAI-compatible endpoint), Ollama (local LLMs, OpenAI-compatible), AWS Bedrock (Anthropic + Meta model formats), OpenRouter (Vercel AI SDK). Contains the full SYSTEM_PROMPT with all 15 action definitions and rules.
 - **sanitizer.ts** — Parses Android Accessibility XML (via `fast-xml-parser`) into `UIElement[]`. Depth-first walk extracting bounds, center coordinates, state flags (enabled, checked, focused, etc.), and parent context. `computeScreenHash()` used for stuck-loop detection.
 - **config.ts** — Singleton `Config` object reading from `process.env` with defaults from constants. `Config.validate()` checks required API keys at startup.
 - **constants.ts** — All magic values: ADB keycodes, swipe coordinates (hardcoded for 1080px-wide screens), default models, file paths, agent defaults.
 
 ## Key Patterns
 
-- **Provider factory:** `getLlmProvider()` returns the appropriate `LLMProvider` based on `Config.LLM_PROVIDER`. Groq reuses the `OpenAIProvider` class with a different base URL.
+- **Provider factory:** `getLlmProvider()` returns the appropriate `LLMProvider` based on `Config.LLM_PROVIDER`. Groq and Ollama reuse the `OpenAIProvider` class with different base URLs.
 - **Screen state diffing:** Hash-based comparison (id + text + center + state). After STUCK_THRESHOLD unchanged steps, recovery hints are injected into the LLM prompt.
 - **Vision fallback:** When `getInteractiveElements()` returns empty (custom UI, WebView, Flutter), a screenshot is captured and the LLM gets a fallback context suggesting coordinate-based taps.
 - **LLM response parsing:** `parseJsonResponse()` handles both clean JSON and markdown-wrapped code blocks. Falls back to "wait" action on parse failure.
@@ -56,7 +56,7 @@ Seven source files in `src/`, no subdirectories:
 
 ## Environment Setup
 
-Requires: Bun 1.0+, ADB (Android SDK Platform Tools) in PATH, an Android device connected via USB/WiFi with accessibility enabled, and an API key for at least one LLM provider (Groq, OpenAI, Bedrock, or OpenRouter).
+Requires: Bun 1.0+, ADB (Android SDK Platform Tools) in PATH, an Android device connected via USB/WiFi with accessibility enabled, and either a local Ollama install or an API key for a cloud LLM provider (Groq, OpenAI, Bedrock, or OpenRouter).
 
 Copy `.env.example` to `.env` and configure `LLM_PROVIDER` + the corresponding API key.
 
