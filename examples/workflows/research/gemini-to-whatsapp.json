@@ -1,23 +1,23 @@
 {
-  "name": "Ask Gemini about DroidClaw and share to WhatsApp",
+  "name": "Ask Gemini about DunSocial and share to WhatsApp",
   "steps": [
     {
       "app": "com.google.android.apps.bard",
-      "goal": "Gemini app is now open. Find the text input field and type exactly: 'tell me more about droidclaw.ai' — then look for the send icon button which is located next to the 'fast' button at the bottom of the input area. Tap that send icon to submit the query. Do NOT press enter — you MUST tap the send icon. Wait for the full response to load completely. Do NOT mark done until you can see the AI has generated a response with actual text content on screen.",
+      "goal": "Type 'tell me more about duntasks.com' in the text input field and tap send. Wait for the full AI response to load before marking done.",
       "maxSteps": 10
     },
     {
-      "goal": "Gemini has finished generating its response. The Copy button is NOT visible yet — it is located at the BOTTOM of the response, below all the text. You MUST scroll down repeatedly until you reach the very end of the response where action buttons appear. Keep scrolling down until you see a 'Copy' button or a copy icon (it may look like two overlapping squares). Once the Copy button is visible on screen, tap it. After tapping Copy, wait briefly — the text is now in the clipboard. Then mark done.",
-      "maxSteps": 15
+      "goal": "Use find_and_tap with query 'Copy' to find and tap the Copy button. It will automatically scroll down to find it. Mark done after it completes.",
+      "maxSteps": 5
     },
     {
       "app": "com.whatsapp",
-      "goal": "WhatsApp is now open showing the chat list. Look for a contact or chat named 'vi' or 'Vi' in the visible chat list. IMPORTANT: When you find the contact, tap on the contact NAME TEXT on the right side of the row — do NOT tap on the profile picture/image on the left side. If 'vi' is NOT visible in the chat list, tap the search icon (magnifying glass) at the top of the screen, then type 'vi' in the search field, then tap on the matching contact name text (not the profile image) to open that chat. Do NOT mark done until you are inside the chat conversation with Vi.",
-      "maxSteps": 10
+      "goal": "Open the chat with contact 'Vi'. If Vi is visible in the chat list, tap it. If not, search for 'vi' and tap the result. Mark done once inside the chat.",
+      "maxSteps": 8
     },
     {
-      "goal": "You are now inside the WhatsApp chat with Vi. The clipboard already contains the Gemini response from the previous step. Do these actions in this EXACT order: Step 1: Tap the message input field at the bottom of the chat (where it says 'Type a message' or 'Message'). Step 2: Use the 'paste' action — this will paste the clipboard content into the input field. Do NOT try to long-press or manually paste — just use the paste action directly. Step 3: After pasting, you should see text in the input field. Now tap the green Send button (arrow icon) to send the message. Mark done after the message is sent.",
-      "maxSteps": 10
+      "goal": "Tap the message input field, paste clipboard content, then tap Send.",
+      "maxSteps": 8
     }
   ]
 }

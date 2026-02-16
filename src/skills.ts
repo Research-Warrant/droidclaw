@@ -311,6 +311,27 @@ function waitForContent(elements: UIElement[]): ActionResult {
 // Skill 4: find_and_tap
 // ===========================================
 
+/**
+ * Searches visible elements for a match. Returns the best match or null.
+ */
+function findMatch(elements: UIElement[], queryLower: string): UIElement | null {
+  const matches = elements.filter(
+    (el) => el.text && el.text.toLowerCase().includes(queryLower)
+  );
+  if (matches.length === 0) return null;
+
+  const scored = matches.map((el) => {
+    let score = 0;
+    if (el.enabled) score += 10;
+    if (el.clickable || el.longClickable) score += 5;
+    if (el.text.toLowerCase() === queryLower) score += 20;
+    else score += 5;
+    return { el, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].el;
+}
+
 function findAndTap(
   decision: ActionDecision,
   elements: UIElement[]
@@ -322,42 +343,48 @@ function findAndTap(
 
   const queryLower = query.toLowerCase();
 
-  // 1. Search elements for text matching query
-  const matches = elements.filter(
-    (el) => el.text && el.text.toLowerCase().includes(queryLower)
-  );
+  // 1. Check current screen first
+  let best = findMatch(elements, queryLower);
 
-  if (matches.length === 0) {
-    // Return available element texts to help the LLM
+  // 2. If not found, scroll down and re-check (up to 10 scrolls)
+  if (!best) {
+    const swipeCoords = getSwipeCoords();
+    const upCoords = swipeCoords["up"]; // swipe up = scroll down
+    const maxScrolls = 10;
+
+    for (let i = 0; i < maxScrolls; i++) {
+      console.log(`find_and_tap: "${query}" not visible, scrolling down (${i + 1}/${maxScrolls})`);
+      runAdbCommand([
+        "shell", "input", "swipe",
+        String(upCoords[0]), String(upCoords[1]),
+        String(upCoords[2]), String(upCoords[3]),
+        SWIPE_DURATION_MS,
+      ]);
+      Bun.sleepSync(1500);
+
+      const freshElements = rescanScreen();
+      best = findMatch(freshElements, queryLower);
+      if (best) {
+        console.log(`find_and_tap: Found "${query}" after ${i + 1} scroll(s)`);
+        break;
+      }
+    }
+  }
+
+  if (!best) {
     const available = elements
       .filter((el) => el.text)
       .map((el) => el.text)
       .slice(0, 15);
     return {
       success: false,
-      message: `No element matching "${query}" found. Available: ${available.join(", ")}`,
+      message: `No element matching "${query}" found after scrolling. Available: ${available.join(", ")}`,
     };
   }
 
-  // 2. Score matches
-  const scored = matches.map((el) => {
-    let score = 0;
-    if (el.enabled) score += 10;
-    if (el.clickable || el.longClickable) score += 5;
-    if (el.text.toLowerCase() === queryLower) score += 20; // exact match
-    else score += 5; // partial match
-    return { el, score };
-  });
-
-  // 3. Pick highest-scoring match
-  scored.sort((a, b) => b.score - a.score);
-  const best = scored[0].el;
+  // 3. Tap it
   const [x, y] = best.center;
-
-  // 4. Tap it
-  console.log(
-    `find_and_tap: Tapping "${best.text}" at (${x}, ${y}) [score: ${scored[0].score}]`
-  );
+  console.log(`find_and_tap: Tapping "${best.text}" at (${x}, ${y})`);
   runAdbCommand(["shell", "input", "tap", String(x), String(y)]);
 
   return {
