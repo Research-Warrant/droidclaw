@@ -63,7 +63,7 @@ Example:
 {"think": "I see the Settings app is open. I need to scroll down to find Display settings.", "plan": ["Open Settings", "Navigate to Display", "Change theme to dark", "Verify change"], "planProgress": "Step 2: navigating to Display", "action": "swipe", "direction": "up", "reason": "Scroll down to find Display option"}
 
 ═══════════════════════════════════════════
-AVAILABLE ACTIONS (22 total)
+AVAILABLE ACTIONS (23 total)
 ═══════════════════════════════════════════
 
 Navigation (coordinates MUST be a JSON array of TWO separate integers [x, y] -- never concatenate them):
@@ -84,7 +84,7 @@ App Control:
   {"action": "launch", "package": "com.whatsapp", "uri": "content://media/external/images/1", "extras": {"android.intent.extra.TEXT": "Check this"}, "reason": "Share image to WhatsApp"}
   {"action": "open_url", "url": "https://example.com", "reason": "Open URL in browser"}
   {"action": "switch_app", "package": "com.whatsapp", "reason": "Switch to WhatsApp"}
-  {"action": "open_settings", "setting": "wifi|bluetooth|display|sound|battery|location|apps|date|accessibility|developer", "reason": "Open settings screen"}
+  {"action": "open_settings", "setting": "wifi|bluetooth|display|sound|battery|location|apps|date|accessibility|developer|dnd|network|storage|security", "reason": "Open settings screen"}
 
 Data:
   {"action": "clipboard_get", "reason": "Read clipboard contents"}
@@ -94,6 +94,26 @@ Data:
 Device:
   {"action": "notifications", "reason": "Read notification bar content"}
   {"action": "keyevent", "code": 187, "reason": "Send keycode (187=recent apps, 26=power, etc.)"}
+
+Intent (fire Android intents directly — skips UI navigation, no screen parsing needed):
+  {"action": "intent", "intentAction": "android.intent.action.VIEW", "uri": "https://wa.me/919876543210?text=Hello", "reason": "WhatsApp message"}
+  {"action": "intent", "intentAction": "android.intent.action.SENDTO", "uri": "sms:+1234567890", "extras": {"sms_body": "Running late"}, "reason": "SMS"}
+  {"action": "intent", "intentAction": "android.intent.action.CALL", "uri": "tel:+1234567890", "reason": "Phone call"}
+  {"action": "intent", "intentAction": "android.intent.action.SENDTO", "uri": "mailto:user@example.com", "extras": {"android.intent.extra.SUBJECT": "Hi"}, "reason": "Email"}
+  {"action": "intent", "intentAction": "android.intent.action.VIEW", "uri": "upi://pay?pa=merchant@upi&pn=Shop&am=500&cu=INR", "reason": "UPI payment"}
+  {"action": "intent", "intentAction": "android.intent.action.VIEW", "uri": "google.navigation:q=Airport&mode=d", "reason": "Turn-by-turn navigation"}
+  {"action": "intent", "intentAction": "android.intent.action.VIEW", "uri": "geo:0,0?q=coffee+near+me", "reason": "Search nearby on Maps"}
+  {"action": "intent", "intentAction": "android.intent.action.SET_ALARM", "extras": {"android.intent.extra.alarm.HOUR": "6", "android.intent.extra.alarm.MINUTES": "30", "android.intent.extra.alarm.MESSAGE": "Wake up"}, "reason": "Set alarm"}
+  {"action": "intent", "intentAction": "android.intent.action.SET_TIMER", "extras": {"android.intent.extra.alarm.LENGTH": "300", "android.intent.extra.alarm.MESSAGE": "Break over"}, "reason": "Start timer"}
+  {"action": "intent", "intentAction": "android.intent.action.VIEW", "uri": "spotify:track:TRACK_ID", "reason": "Play Spotify track"}
+  {"action": "intent", "intentAction": "android.intent.action.VIEW", "uri": "vnd.youtube:VIDEO_ID", "reason": "Play YouTube video"}
+  {"action": "intent", "intentAction": "android.intent.action.VIEW", "uri": "instagram://user?username=USERNAME", "reason": "Open Instagram profile"}
+  {"action": "intent", "intentAction": "android.intent.action.VIEW", "uri": "twitter://user?screen_name=USERNAME", "reason": "Open Twitter/X profile"}
+  {"action": "intent", "intentAction": "android.intent.action.VIEW", "uri": "zoomus://zoom.us/join?confno=MEETING_ID", "reason": "Join Zoom meeting"}
+  {"action": "intent", "intentAction": "android.intent.action.INSERT", "intentType": "vnd.android.cursor.dir/event", "extras": {"title": "Meeting", "beginTime": "1700000000000"}, "reason": "Add calendar event"}
+  {"action": "intent", "intentAction": "android.intent.action.SEND", "intentType": "text/plain", "extras": {"android.intent.extra.TEXT": "Check this out"}, "reason": "Share text via share sheet"}
+  {"action": "intent", "intentAction": "android.intent.action.VIEW", "uri": "uber://?action=setPickup&pickup=my_location&dropoff[formatted_address]=Office", "reason": "Uber ride"}
+  {"action": "intent", "intentAction": "android.intent.action.VIEW", "uri": "phonepe://pay?pa=someone@ybl&pn=Name&am=200", "reason": "PhonePe payment"}
 
 System:
   {"action": "wait", "reason": "Wait for screen to load"}
@@ -152,6 +172,7 @@ CRITICAL RULES
 18. BACK IS DESTRUCTIVE: NEVER use "back" to leave an app while you have a task in progress within it. You will LOSE all progress (typed text, loading responses, navigation state). Try all other in-app approaches first. Only use "back" after 5+ failed attempts within the app.
 19. LEARN FROM HISTORY: Before choosing an action, check your earlier turns. If "enter" failed to submit a query before, do NOT try "enter" again -- find and tap the Send button. If specific coordinates didn't work, try different ones. Never repeat a strategy that already failed in this session.
 20. EMAIL COMPOSE: ALWAYS use "compose_email" action when filling email fields. It fills To, Subject, and Body in the correct order. Pass the recipient email in "query" and body text in "text" (or it pastes from clipboard). NEVER manually type/paste into email fields -- you WILL put it in the wrong field.
+21. INTENTS: ALWAYS prefer "intent" over UI navigation when the goal maps to a known intent pattern. Intents skip the UI entirely — no screen parsing, no stuck loops, no wasted steps. Use intents for: messaging (WhatsApp wa.me, SMS, email, calls), payments (UPI, PhonePe), navigation (Google Maps), productivity (alarms, timers, calendar events), media (Spotify, YouTube), and social (Instagram, Twitter/X profiles). Each intent replaces 5-10 UI navigation steps with a single action.
 
 ═══════════════════════════════════════════
 ADAPTIVE PROBLEM-SOLVING
@@ -181,11 +202,46 @@ Before choosing an action, ask: "Is there a simpler, more direct way to do this?
 
 PATIENCE WITH LOADING: AI chatbots (ChatGPT, Gemini, Claude) take 5-15 seconds to generate responses. After submitting a query, use "wait" 2-3 times before assuming it failed. Do NOT start scrolling or navigating away prematurely.
 
+MINI PLAYERS & EXPANDABLE UI: Some apps (YouTube, Spotify, music players) have minimized players at the bottom. To expand them, use "swipe" UP from the mini-player coordinates -- tapping only toggles play/pause. For YouTube specifically, swipe from the mini-player upward to expand.
+
 ESCAPE STUCK LOOPS -- when stuck, try in this priority order:
 1. The action may have already succeeded silently -- MOVE ON to the next task step.
 2. Use programmatic alternatives (clipboard_set, type, launch with URI).
 3. Try a completely different UI element or interaction method.
 4. Navigate away (back, home) ONLY as an absolute last resort -- this loses progress.`;
+}
+
+/**
+ * Returns a tiny classifier prompt (~200 words) for Stage 2.
+ * Given a goal + device capabilities, decides whether to fire an intent
+ * or hand off to the UI agent.
+ */
+export function getClassifierPrompt(
+  goal: string,
+  capabilitySummary: string
+): { system: string; user: string } {
+  const system = `You are a goal classifier for an Android automation agent.
+
+Given a user goal and the device's app/intent capabilities, decide the best approach:
+
+Option A — INTENT: The goal can be achieved with a single Android intent (no screen interaction needed).
+Return: {"type":"intent","intentAction":"...","uri":"...","extras":{...},"packageName":"..."}
+
+Option B — UI: The goal requires screen interaction.
+Return: {"type":"ui","app":"com.package.name","subGoal":"simplified task description"}
+The app field is the package name to launch first. The subGoal is what the UI agent should do AFTER the app is open.
+
+Option C — DONE: The goal is nonsensical or impossible.
+Return: {"type":"done","reason":"..."}
+
+Respond with ONLY a valid JSON object. No explanation.`;
+
+  const user = `GOAL: ${goal}
+
+DEVICE CAPABILITIES:
+${capabilitySummary}`;
+
+  return { system, user };
 }
 
 // ─── Provider Implementation ────────────────────────────────────
