@@ -2,10 +2,18 @@
 	import { listKeys, createKey, deleteKey } from '$lib/api/api-keys.remote';
 
 	let newKeyValue = $state<string | null>(null);
+	let keysPromise = $state(listKeys());
 
 	$effect(() => {
 		if (createKey.result?.key) {
 			newKeyValue = createKey.result.key;
+			keysPromise = listKeys();
+		}
+	});
+
+	$effect(() => {
+		if (deleteKey.result?.deleted) {
+			keysPromise = listKeys();
 		}
 	});
 </script>
@@ -71,7 +79,7 @@
 		<h3 class="font-semibold">Your Keys</h3>
 	</div>
 
-	{#await listKeys()}
+	{#await keysPromise}
 		<div class="px-6 py-8 text-center text-sm text-neutral-500">Loading keys...</div>
 	{:then keys}
 		{#if keys && keys.length > 0}

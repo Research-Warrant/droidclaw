@@ -1,6 +1,6 @@
 import { form, getRequestEvent, query } from '$app/server';
 import { auth } from '$lib/server/auth';
-import { createKeySchema } from '$lib/schema/api-keys';
+import { createKeySchema, deleteKeySchema } from '$lib/schema/api-keys';
 
 export const listKeys = query(async () => {
 	const { request } = getRequestEvent();
@@ -16,12 +16,11 @@ export const createKey = form(createKeySchema, async ({ name }) => {
 	return result;
 });
 
-export const deleteKey = form(async () => {
+export const deleteKey = form(deleteKeySchema, async ({ keyId }) => {
 	const { request } = getRequestEvent();
-	const formData = await request.clone().formData();
-	const keyId = formData.get('keyId') as string;
 	await auth.api.deleteApiKey({
 		body: { keyId },
 		headers: request.headers
 	});
+	return { deleted: true };
 });
