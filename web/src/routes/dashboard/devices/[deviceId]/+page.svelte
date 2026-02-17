@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import {
-		listDevices,
+		getDevice,
 		listDeviceSessions,
 		listSessionSteps,
 		getDeviceStats
@@ -15,15 +15,25 @@
 	let activeTab = $state<'overview' | 'sessions' | 'run'>('overview');
 
 	// Device data from DB
-	const allDevices = await listDevices();
-	const deviceData = allDevices.find((d) => d.deviceId === deviceId);
+	const deviceData = (await getDevice(deviceId)) as {
+		deviceId: string;
+		name: string;
+		status: string;
+		model: string | null;
+		manufacturer: string | null;
+		androidVersion: string | null;
+		screenWidth: number | null;
+		screenHeight: number | null;
+		batteryLevel: number | null;
+		isCharging: boolean;
+		lastSeen: string;
+	} | null;
 
 	// Device stats
 	const stats = (await getDeviceStats(deviceId)) as {
 		totalSessions: number;
 		successRate: number;
 		avgSteps: number;
-		lastGoal: { goal: string; status: string; startedAt: Date } | null;
 	} | null;
 
 	// Session history

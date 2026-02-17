@@ -1,7 +1,7 @@
 import { query, getRequestEvent } from '$app/server';
 import { db } from '$lib/server/db';
 import { device, agentSession, agentStep } from '$lib/server/db/schema';
-import { eq, desc, and, count, avg, sql } from 'drizzle-orm';
+import { eq, desc, and, count, avg, sql, inArray } from 'drizzle-orm';
 
 export const listDevices = query(async () => {
 	const { locals } = getRequestEvent();
@@ -25,7 +25,7 @@ export const listDevices = query(async () => {
 						startedAt: agentSession.startedAt
 					})
 					.from(agentSession)
-					.where(sql`${agentSession.deviceId} IN ${deviceIds}`)
+					.where(inArray(agentSession.deviceId, deviceIds))
 					.orderBy(desc(agentSession.startedAt))
 			: [];
 
@@ -59,39 +59,61 @@ export const listDevices = query(async () => {
 	});
 });
 
+export const getDevice = query(async (deviceId: string) => {
+	const { locals } = getRequestEvent();
+	if (!locals.user) return null;
+
+	const rows = await db
+		.select()
+		.from(device)
+		.where(and(eq(device.id, deviceId), eq(device.userId, locals.user.id)))
+		.limit(1);
+
+	if (rows.length === 0) return null;
+
+	const d = rows[0];
+	const info = d.deviceInfo as Record<string, unknown> | null;
+	return {
+		deviceId: d.id,
+		name: d.name,
+		status: d.status,
+		model: (info?.model as string) ?? null,
+		manufacturer: (info?.manufacturer as string) ?? null,
+		androidVersion: (info?.androidVersion as string) ?? null,
+		screenWidth: (info?.screenWidth as number) ?? null,
+		screenHeight: (info?.screenHeight as number) ?? null,
+		batteryLevel: (info?.batteryLevel as number) ?? null,
+		isCharging: (info?.isCharging as boolean) ?? false,
+		lastSeen: d.lastSeen?.toISOString() ?? d.createdAt.toISOString()
+	};
+});
+
 export const getDeviceStats = query(async (deviceId: string) => {
 	const { locals } = getRequestEvent();
 	if (!locals.user) return null;
 
-	const stats = await db
-		.select({
-			totalSessions: count(agentSession.id),
-			successCount: count(sql`CASE WHEN ${agentSession.status} = 'completed' THEN 1 END`),
-			avgSteps: avg(agentSession.stepsUsed)
-		})
-		.from(agentSession)
-		.where(and(eq(agentSession.deviceId, deviceId), eq(agentSession.userId, locals.user.id)));
+	try {
+		const stats = await db
+			.select({
+				totalSessions: count(agentSession.id),
+				successCount: count(sql`CASE WHEN ${agentSession.status} = 'completed' THEN 1 END`),
+				avgSteps: avg(agentSession.stepsUsed)
+			})
+			.from(agentSession)
+			.where(and(eq(agentSession.deviceId, deviceId), eq(agentSession.userId, locals.user.id)));
 
-	const lastSession = await db
-		.select({
-			goal: agentSession.goal,
-			status: agentSession.status,
-			startedAt: agentSession.startedAt
-		})
-		.from(agentSession)
-		.where(and(eq(agentSession.deviceId, deviceId), eq(agentSession.userId, locals.user.id)))
-		.orderBy(desc(agentSession.startedAt))
-		.limit(1);
-
-	const s = stats[0];
-	return {
-		totalSessions: Number(s?.totalSessions ?? 0),
-		successRate: s?.totalSessions
-			? Math.round((Number(s.successCount) / Number(s.totalSessions)) * 100)
-			: 0,
-		avgSteps: Math.round(Number(s?.avgSteps ?? 0)),
-		lastGoal: lastSession[0] ?? null
-	};
+		const s = stats[0];
+		return {
+			totalSessions: Number(s?.totalSessions ?? 0),
+			successRate: s?.totalSessions
+				? Math.round((Number(s.successCount) / Number(s.totalSessions)) * 100)
+				: 0,
+			avgSteps: Math.round(Number(s?.avgSteps ?? 0))
+		};
+	} catch (err) {
+		console.error('[getDeviceStats] Query failed:', err);
+		return { totalSessions: 0, successRate: 0, avgSteps: 0 };
+	}
 });
 
 export const listDeviceSessions = query(async (deviceId: string) => {
