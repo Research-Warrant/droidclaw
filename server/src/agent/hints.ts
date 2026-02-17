@@ -13,6 +13,7 @@ const APP_HINTS: Record<string, string[]> = {
   ],
   "com.whatsapp": [
     "To send a message, tap the green arrow/send button — do NOT use 'enter' key.",
+    "SEND SUCCESS: After tapping send, the text field clears and your message appears as a chat bubble. If the field is EMPTY and you see your message in the conversation — it was sent. Say done.",
     "New chat: tap the green floating button (bottom-right), then search for contact.",
     "Media: tap the + or paperclip icon to attach files/images.",
   ],
@@ -43,6 +44,7 @@ const APP_HINTS: Record<string, string[]> = {
     "New message: tap the floating button with + or pencil icon.",
     "To field: type the contact name or number, then select from suggestions.",
     "Send: tap the arrow/send icon, not Enter.",
+    "SEND SUCCESS: After send, if the text field is EMPTY and your message appears in the conversation, it was sent. Say done.",
   ],
   "com.google.android.dialer": [
     "Dial pad: tap the floating phone icon if dial pad isn't visible.",

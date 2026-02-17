@@ -327,6 +327,8 @@ RULES:
 - If SCREEN_CHANGE says "NOT changed", your last action had no effect — change strategy.
 - Do NOT repeat an action that already failed.
 - Say "done" as soon as the goal is achieved.
+- CHECK RECENT_ACTIONS before every step: if you already typed text and tapped send, do NOT type it again.
+- CHAT APP COMPLETION: After typing a message and tapping send in a chat app (WhatsApp, Messages, etc.), if the text field is now EMPTY and your message text appears in the conversation above, the message was SENT SUCCESSFULLY. Say "done" immediately.
 - COPY-PASTE: Use clipboard_set with text from SCREEN_CONTEXT (most reliable), then paste. Or just type directly.`;
 
   if (isStuck) {

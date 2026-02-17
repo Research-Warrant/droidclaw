@@ -63,3 +63,7 @@ Copy `.env.example` to `.env` and configure `LLM_PROVIDER` + the corresponding A
 ## Device Assumptions
 
 Swipe coordinates in `constants.ts` are hardcoded for 1080px-wide screens (center X=540, center Y=1200). Adjust `SWIPE_COORDS` and `SCREEN_CENTER_*` for different resolutions.
+
+## Git Conventions
+
+- Do NOT add `Co-Authored-By: Claude` lines to commit messages.

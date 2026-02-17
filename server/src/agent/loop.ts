@@ -260,6 +260,7 @@ export async function runAgentLoop(
   let stuckCount = 0;
   const recentActions: string[] = [];
   let lastActionFeedback = "";
+  const actionHistory: string[] = []; // Human-readable log of recent actions
 
   // Fetch installed apps from device metadata for LLM context
   let installedAppsContext = "";
@@ -440,12 +441,18 @@ export async function runAgentLoop(
         ? `LAST_ACTION_RESULT: ${lastActionFeedback}\n\n`
         : "";
 
+      // Include recent action history so LLM knows what it already did
+      const historyContext = actionHistory.length > 0
+        ? `RECENT_ACTIONS (what you already did — do NOT repeat completed work):\n${actionHistory.map((h) => `  ${h}`).join("\n")}\n\n`
+        : "";
+
       let userPrompt =
         `GOAL: ${goal}\n\n` +
         `STEP: ${step + 1}/${maxSteps}\n\n` +
         (useDynamicPrompt ? "" : installedAppsContext) +
         foregroundLine +
         actionFeedbackLine +
+        historyContext +
         `SCREEN_CONTEXT:\n${JSON.stringify(elements, null, 2)}` +
         diffContext +
         visionContext;
@@ -510,6 +517,13 @@ export async function runAgentLoop(
       recentActions.push(actionSig);
       if (recentActions.length > 8) recentActions.shift();
 
+      // Build human-readable history entry for LLM context
+      const historyParts = [`Step ${step + 1}: ${actionSig}`];
+      if (action.text) historyParts.push(`text="${action.text}"`);
+      if (action.reason) historyParts.push(`— ${action.reason}`);
+      actionHistory.push(historyParts.join(" "));
+      if (actionHistory.length > 5) actionHistory.shift();
+
       // ── 7. Log + Done check ────────────────────────────────
       const reason = action.reason ?? "";
       console.log(`[Agent ${sessionId}] Step ${step + 1}: ${actionSig} — ${reason}`);
@@ -565,6 +579,10 @@ export async function runAgentLoop(
         const resultSuccess = result.success !== false;
         lastActionFeedback = `${actionSig} -> ${resultSuccess ? "OK" : "FAILED"}: ${result.error ?? result.data ?? "completed"}`;
         console.log(`[Agent ${sessionId}] Step ${step + 1} result: ${lastActionFeedback}`);
+        // Append result to last history entry
+        if (actionHistory.length > 0) {
+          actionHistory[actionHistory.length - 1] += ` → ${resultSuccess ? "OK" : "FAILED"}`;
+        }
         // Update step result in DB
         if (persistentDeviceId) {
           db.update(agentStep).set({ result: lastActionFeedback }).where(eq(agentStep.id, stepId))
