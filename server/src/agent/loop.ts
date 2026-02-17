@@ -21,9 +21,11 @@ import { sessions } from "../ws/sessions.js";
 import {
   getLlmProvider,
   getSystemPrompt,
+  buildDynamicPrompt,
   parseJsonResponse,
   type LLMConfig,
 } from "./llm.js";
+import { formatAppHints } from "./hints.js";
 import { createStuckDetector } from "./stuck.js";
 import { db } from "../db.js";
 import { agentSession, agentStep, device as deviceTable } from "../schema.js";
@@ -42,6 +44,8 @@ export interface AgentLoopOptions {
   originalGoal?: string;
   llmConfig: LLMConfig;
   maxSteps?: number;
+  /** If true, use dynamic prompts instead of mega-prompt (pipeline mode) */
+  pipelineMode?: boolean;
   /** Abort signal for cancellation */
   signal?: AbortSignal;
   onStep?: (step: AgentStep) => void;
@@ -172,6 +176,8 @@ function actionToCommand(
       return {
         type: "launch",
         packageName: action.package ?? "",
+        intentUri: action.uri,
+        intentExtras: action.extras,
       };
 
     case "clear":
@@ -199,10 +205,20 @@ function actionToCommand(
       return { type: "keyevent", code: action.code ?? 0 };
 
     case "open_settings":
-      return { type: "open_settings" };
+      return { type: "open_settings", setting: action.setting };
 
     case "wait":
       return { type: "wait", duration: 2000 };
+
+    case "intent":
+      return {
+        type: "intent",
+        intentAction: action.intentAction,
+        intentUri: action.uri,
+        intentType: action.intentType,
+        intentExtras: action.extras,
+        packageName: action.package,
+      };
 
     case "done":
       return { type: "done" };
@@ -234,7 +250,10 @@ export async function runAgentLoop(
   const sessionId = crypto.randomUUID();
   const llm = getLlmProvider(llmConfig);
   const stuck = createStuckDetector();
-  const systemPrompt = getSystemPrompt();
+
+  // Use legacy prompt if not in pipeline mode (backward compat)
+  const useDynamicPrompt = options.pipelineMode ?? false;
+  const legacySystemPrompt = useDynamicPrompt ? "" : getSystemPrompt();
 
   let prevElements: UIElement[] = [];
   let lastScreenHash = "";
@@ -252,11 +271,16 @@ export async function runAgentLoop(
         .where(eq(deviceTable.id, persistentDeviceId))
         .limit(1);
       const info = rows[0]?.info as Record<string, unknown> | null;
-      const apps = info?.installedApps as Array<{ packageName: string; label: string }> | undefined;
+      const apps = info?.installedApps as Array<{ packageName: string; label: string; intents?: string[] }> | undefined;
       if (apps && apps.length > 0) {
+        // Build app list with intent capabilities
+        const appLines = apps.map((a) => {
+          const intents = a.intents?.length ? ` [${a.intents.join(", ")}]` : "";
+          return `  ${a.label}: ${a.packageName}${intents}`;
+        });
         installedAppsContext =
-          `\nINSTALLED_APPS (use exact packageName for "launch" action):\n` +
-          apps.map((a) => `  ${a.label}: ${a.packageName}`).join("\n") +
+          `\nINSTALLED_APPS (use exact packageName for "launch", use intents in [] for "intent" action):\n` +
+          appLines.join("\n") +
           "\n";
       }
     } catch {
@@ -391,7 +415,24 @@ export async function runAgentLoop(
         useScreenshot = true;
       }
 
-      // ── 4. Build user prompt ────────────────────────────────
+      // ── 4. Build prompts ──────────────────────────────────────
+      let systemPrompt: string;
+      if (useDynamicPrompt) {
+        const hasEditableFields = elements.some((e) => e.editable);
+        const hasScrollable = elements.some((e) => e.scrollable);
+        const appHintsStr = packageName ? formatAppHints(packageName) : "";
+
+        systemPrompt = buildDynamicPrompt({
+          hasEditableFields,
+          hasScrollable,
+          foregroundApp: packageName,
+          appHints: appHintsStr,
+          isStuck: stuck.isStuck(),
+        });
+      } else {
+        systemPrompt = legacySystemPrompt;
+      }
+
       const foregroundLine = packageName
         ? `FOREGROUND_APP: ${packageName}\n\n`
         : "";
@@ -402,15 +443,15 @@ export async function runAgentLoop(
       let userPrompt =
         `GOAL: ${goal}\n\n` +
         `STEP: ${step + 1}/${maxSteps}\n\n` +
-        installedAppsContext +
+        (useDynamicPrompt ? "" : installedAppsContext) +
         foregroundLine +
         actionFeedbackLine +
         `SCREEN_CONTEXT:\n${JSON.stringify(elements, null, 2)}` +
         diffContext +
         visionContext;
 
-      // Add stuck recovery hint from detector
-      if (stuck.isStuck()) {
+      // Add stuck recovery hint from detector (only for legacy mode; dynamic prompt handles it)
+      if (!useDynamicPrompt && stuck.isStuck()) {
         userPrompt += "\n\n" + stuck.getRecoveryHint();
       }
 
@@ -433,11 +474,26 @@ export async function runAgentLoop(
         continue;
       }
 
-      // ── 6. Parse response ───────────────────────────────────
-      const parsed = parseJsonResponse(rawResponse);
+      // ── 6. Parse response (retry once on failure) ─────────
+      let parsed = parseJsonResponse(rawResponse);
+      if (!parsed || !parsed.action) {
+        console.warn(
+          `[Agent ${sessionId}] Parse failed at step ${step + 1}, retrying LLM. Raw: ${rawResponse.slice(0, 200)}`
+        );
+        try {
+          rawResponse = await llm.getAction(
+            systemPrompt,
+            userPrompt + "\n\nIMPORTANT: Your previous response was not valid JSON. You MUST respond with ONLY a valid JSON object.",
+            useScreenshot ? screenshot : undefined
+          );
+          parsed = parseJsonResponse(rawResponse);
+        } catch {
+          // retry failed, fall through
+        }
+      }
       if (!parsed || !parsed.action) {
         console.error(
-          `[Agent ${sessionId}] Failed to parse LLM response at step ${step + 1}`
+          `[Agent ${sessionId}] Failed to parse LLM response at step ${step + 1}. Raw: ${rawResponse.slice(0, 300)}`
         );
         stuck.recordAction("parse_error", screenHash);
         lastActionFeedback = "parse_error -> FAILED: Could not parse LLM response";
