@@ -21,7 +21,9 @@ import com.thisux.droidclaw.model.ConnectionState
 import com.thisux.droidclaw.model.GoalMessage
 import com.thisux.droidclaw.model.GoalStatus
 import com.thisux.droidclaw.model.AgentStep
+import com.thisux.droidclaw.model.HeartbeatMessage
 import com.thisux.droidclaw.util.DeviceInfoHelper
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -134,6 +136,20 @@ class ConnectionService : LifecycleService() {
 
             val deviceInfo = DeviceInfoHelper.get(this@ConnectionService)
             ws.connect(serverUrl, apiKey, deviceInfo)
+
+            // Periodic heartbeat for battery updates
+            launch {
+                while (true) {
+                    delay(60_000L) // every 60 seconds
+                    if (connectionState.value == ConnectionState.Connected) {
+                        val (battery, charging) = DeviceInfoHelper.getBattery(this@ConnectionService)
+                        webSocket?.sendTyped(HeartbeatMessage(
+                            batteryLevel = battery,
+                            isCharging = charging
+                        ))
+                    }
+                }
+            }
         }
     }
 
