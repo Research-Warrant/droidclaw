@@ -8,6 +8,9 @@ import {
   handleDashboardClose,
 } from "./ws/dashboard.js";
 import type { WebSocketData } from "./ws/sessions.js";
+import { devices } from "./routes/devices.js";
+import { goals } from "./routes/goals.js";
+import { health } from "./routes/health.js";
 
 const app = new Hono();
 
@@ -27,8 +30,10 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
   return auth.handler(c.req.raw);
 });
 
-// Health check
-app.get("/health", (c) => c.json({ status: "ok" }));
+// REST routes
+app.route("/devices", devices);
+app.route("/goals", goals);
+app.route("/health", health);
 
 // Start server with WebSocket support
 const server = Bun.serve<WebSocketData>({
