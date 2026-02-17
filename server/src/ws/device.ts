@@ -327,6 +327,34 @@ export async function handleDeviceMessage(
       break;
     }
 
+    case "heartbeat": {
+      const persistentDeviceId = ws.data.persistentDeviceId;
+      const userId = ws.data.userId;
+      if (persistentDeviceId && userId) {
+        // Update deviceInfo in DB with latest battery
+        db.update(device)
+          .set({
+            deviceInfo: {
+              ...(await db.select({ info: device.deviceInfo }).from(device).where(eq(device.id, persistentDeviceId)).limit(1).then(r => (r[0]?.info as Record<string, unknown>) ?? {})),
+              batteryLevel: msg.batteryLevel,
+              isCharging: msg.isCharging,
+            },
+            lastSeen: new Date(),
+          })
+          .where(eq(device.id, persistentDeviceId))
+          .catch((err) => console.error(`[DB] Failed to update heartbeat: ${err}`));
+
+        // Broadcast to dashboard
+        sessions.notifyDashboard(userId, {
+          type: "device_status",
+          deviceId: persistentDeviceId,
+          batteryLevel: msg.batteryLevel,
+          isCharging: msg.isCharging,
+        });
+      }
+      break;
+    }
+
     default: {
       console.warn(
         `Unknown message type from device ${ws.data.deviceId}:`,
