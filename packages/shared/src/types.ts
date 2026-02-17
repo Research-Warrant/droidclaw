@@ -61,6 +61,11 @@ export interface DeviceInfo {
   isCharging: boolean;
 }
 
+export interface InstalledApp {
+  packageName: string;
+  label: string;
+}
+
 export interface ScreenState {
   elements: UIElement[];
   screenshot?: string;

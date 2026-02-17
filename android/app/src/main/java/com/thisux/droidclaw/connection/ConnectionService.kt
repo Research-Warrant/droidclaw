@@ -22,7 +22,10 @@ import com.thisux.droidclaw.model.GoalMessage
 import com.thisux.droidclaw.model.GoalStatus
 import com.thisux.droidclaw.model.AgentStep
 import com.thisux.droidclaw.model.HeartbeatMessage
+import com.thisux.droidclaw.model.AppsMessage
+import com.thisux.droidclaw.model.InstalledAppInfo
 import com.thisux.droidclaw.util.DeviceInfoHelper
+import android.content.pm.PackageManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -125,6 +128,12 @@ class ConnectionService : LifecycleService() {
                             ConnectionState.Disconnected -> "Disconnected"
                         }
                     )
+                    // Send installed apps list once connected
+                    if (state == ConnectionState.Connected) {
+                        val apps = getInstalledApps()
+                        webSocket?.sendTyped(AppsMessage(apps = apps))
+                        Log.i(TAG, "Sent ${apps.size} installed apps to server")
+                    }
                 }
             }
             launch { ws.errorMessage.collect { errorMessage.value = it } }
@@ -177,6 +186,17 @@ class ConnectionService : LifecycleService() {
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
         return null
+    }
+
+    private fun getInstalledApps(): List<InstalledAppInfo> {
+        val pm = packageManager
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val activities = pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+        return activities.mapNotNull { resolveInfo ->
+            val pkg = resolveInfo.activityInfo.packageName
+            val label = resolveInfo.loadLabel(pm).toString()
+            InstalledAppInfo(packageName = pkg, label = label)
+        }.distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
     }
 
     private fun createNotificationChannel() {

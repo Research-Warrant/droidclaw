@@ -8,10 +8,21 @@
  */
 
 import { sessions } from "../ws/sessions.js";
+import { db } from "../db.js";
+import { device as deviceTable } from "../schema.js";
+import { eq } from "drizzle-orm";
 
-// ─── App Name → Package Name Map ────────────────────────────
+// ─── Installed App type ──────────────────────────────────────
 
-const APP_PACKAGES: Record<string, string> = {
+interface InstalledApp {
+  packageName: string;
+  label: string;
+}
+
+// ─── Fallback App Name → Package Name Map ────────────────────
+// Used only when device has no installed apps data in DB.
+
+const FALLBACK_PACKAGES: Record<string, string> = {
   youtube: "com.google.android.youtube",
   gmail: "com.google.android.gm",
   chrome: "com.android.chrome",
@@ -79,12 +90,32 @@ interface PreprocessResult {
 }
 
 /**
- * Try to find a known app name at the start of a goal string.
+ * Build a label→packageName lookup from the device's installed apps.
+ * Keys are lowercase app labels (e.g. "youtube", "play store").
+ */
+function buildInstalledAppMap(apps: InstalledApp[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const app of apps) {
+    map[app.label.toLowerCase()] = app.packageName;
+  }
+  return map;
+}
+
+/**
+ * Try to find an app name at the start of a goal string.
+ * Checks device's installed apps first, then falls back to hardcoded map.
  * Returns the package name and remaining text, or null.
  */
-function matchAppName(lower: string): { pkg: string; appName: string; rest: string } | null {
+function matchAppName(
+  lower: string,
+  installedApps: InstalledApp[]
+): { pkg: string; appName: string; rest: string } | null {
+  // Build combined lookup: installed apps take priority over fallback
+  const installedMap = buildInstalledAppMap(installedApps);
+  const combined: Record<string, string> = { ...FALLBACK_PACKAGES, ...installedMap };
+
   // Try longest app names first (e.g. "google meet" before "meet")
-  const sorted = Object.keys(APP_PACKAGES).sort((a, b) => b.length - a.length);
+  const sorted = Object.keys(combined).sort((a, b) => b.length - a.length);
 
   for (const name of sorted) {
     // Match: "open <app> [app] and <rest>" or "open <app> [app]"
@@ -93,7 +124,7 @@ function matchAppName(lower: string): { pkg: string; appName: string; rest: stri
     );
     const m = lower.match(pattern);
     if (m) {
-      return { pkg: APP_PACKAGES[name], appName: name, rest: m[1]?.trim() ?? "" };
+      return { pkg: combined[name], appName: name, rest: m[1]?.trim() ?? "" };
     }
   }
   return null;
@@ -101,6 +132,23 @@ function matchAppName(lower: string): { pkg: string; appName: string; rest: stri
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Fetch installed apps from the device record in DB.
+ */
+async function fetchInstalledApps(persistentDeviceId: string): Promise<InstalledApp[]> {
+  try {
+    const rows = await db
+      .select({ info: deviceTable.deviceInfo })
+      .from(deviceTable)
+      .where(eq(deviceTable.id, persistentDeviceId))
+      .limit(1);
+    const info = rows[0]?.info as Record<string, unknown> | null;
+    return (info?.installedApps as InstalledApp[]) ?? [];
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -113,12 +161,16 @@ function escapeRegex(s: string): string {
  */
 export async function preprocessGoal(
   deviceId: string,
-  goal: string
+  goal: string,
+  persistentDeviceId?: string
 ): Promise<PreprocessResult> {
   const lower = goal.toLowerCase().trim();
 
+  // Fetch device's actual installed apps for accurate package resolution
+  const installedApps = persistentDeviceId ? await fetchInstalledApps(persistentDeviceId) : [];
+
   // ── Pattern: "open <app> [and <remaining>]" ───────────────
-  const appMatch = matchAppName(lower);
+  const appMatch = matchAppName(lower, installedApps);
 
   if (appMatch) {
     try {

@@ -4,7 +4,9 @@
 		getDevice,
 		listDeviceSessions,
 		listSessionSteps,
-		getDeviceStats
+		getDeviceStats,
+		submitGoal as submitGoalCmd,
+		stopGoal as stopGoalCmd
 	} from '$lib/api/devices.remote';
 	import { dashboardWs } from '$lib/stores/dashboard-ws.svelte';
 	import { onMount } from 'svelte';
@@ -27,6 +29,7 @@
 		batteryLevel: number | null;
 		isCharging: boolean;
 		lastSeen: string;
+		installedApps: Array<{ packageName: string; label: string }>;
 	} | null;
 
 	// Device stats
@@ -80,20 +83,30 @@
 		}
 	}
 
+	let runError = $state('');
+
 	async function submitGoal() {
 		if (!goal.trim()) return;
 		runStatus = 'running';
+		runError = '';
 		currentGoal = goal;
 		steps = [];
 
-		const res = await fetch('/api/goals', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ deviceId, goal })
-		});
-
-		if (!res.ok) {
+		try {
+			await submitGoalCmd({ deviceId, goal });
+		} catch (e: any) {
+			runError = e.message ?? String(e);
 			runStatus = 'failed';
+		}
+	}
+
+	async function stopGoal() {
+		try {
+			await stopGoalCmd({ deviceId });
+			runStatus = 'failed';
+			runError = 'Stopped by user';
+		} catch {
+			// ignore
 		}
 	}
 
@@ -158,6 +171,16 @@
 		const days = Math.floor(hrs / 24);
 		return `${days}d ago`;
 	}
+
+	let appSearch = $state('');
+	const filteredApps = $derived(
+		(deviceData?.installedApps ?? []).filter(
+			(a) =>
+				!appSearch ||
+				a.label.toLowerCase().includes(appSearch.toLowerCase()) ||
+				a.packageName.toLowerCase().includes(appSearch.toLowerCase())
+		)
+	);
 
 	const battery = $derived(liveBattery ?? (deviceData?.batteryLevel as number | null));
 	const charging = $derived(liveCharging || (deviceData?.isCharging as boolean));
@@ -279,6 +302,34 @@
 			</div>
 		</div>
 
+		<!-- Installed Apps -->
+		{#if deviceData && deviceData.installedApps.length > 0}
+			<div class="mt-4 rounded-lg border border-neutral-200">
+				<div class="flex items-center justify-between border-b border-neutral-100 px-5 py-3">
+					<h3 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+						Installed Apps
+						<span class="ml-1 font-normal normal-case text-neutral-400">({deviceData.installedApps.length})</span>
+					</h3>
+					<input
+						type="text"
+						bind:value={appSearch}
+						placeholder="Search apps..."
+						class="w-48 rounded border border-neutral-200 px-2.5 py-1 text-xs focus:border-neutral-400 focus:outline-none"
+					/>
+				</div>
+				<div class="max-h-72 overflow-y-auto">
+					{#each filteredApps as app (app.packageName)}
+						<div class="flex items-center justify-between px-5 py-2 text-sm hover:bg-neutral-50">
+							<span class="font-medium">{app.label}</span>
+							<span class="font-mono text-xs text-neutral-400">{app.packageName}</span>
+						</div>
+					{:else}
+						<p class="px-5 py-3 text-xs text-neutral-400">No apps match "{appSearch}"</p>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
 		<!-- Sessions Tab -->
 	{:else if activeTab === 'sessions'}
 		{#if sessions.length === 0}
@@ -359,13 +410,21 @@
 					disabled={runStatus === 'running'}
 					onkeydown={(e) => e.key === 'Enter' && submitGoal()}
 				/>
-				<button
-					onclick={submitGoal}
-					disabled={runStatus === 'running'}
-					class="rounded bg-neutral-800 px-4 py-2 text-sm text-white hover:bg-neutral-700 disabled:opacity-50"
-				>
-					{runStatus === 'running' ? 'Running...' : 'Run'}
-				</button>
+				{#if runStatus === 'running'}
+					<button
+						onclick={stopGoal}
+						class="rounded bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500"
+					>
+						Stop
+					</button>
+				{:else}
+					<button
+						onclick={submitGoal}
+						class="rounded bg-neutral-800 px-4 py-2 text-sm text-white hover:bg-neutral-700"
+					>
+						Run
+					</button>
+				{/if}
 			</div>
 		</div>
 
@@ -391,6 +450,11 @@
 						<span class="text-xs text-red-600">Failed</span>
 					{/if}
 				</div>
+				{#if runError}
+					<div class="border-t border-red-100 bg-red-50 px-5 py-3 text-xs text-red-700">
+						{runError}
+					</div>
+				{/if}
 				{#if steps.length > 0}
 					<div class="divide-y divide-neutral-100">
 						{#each steps as s (s.step)}

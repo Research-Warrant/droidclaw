@@ -26,7 +26,7 @@ import {
 } from "./llm.js";
 import { createStuckDetector } from "./stuck.js";
 import { db } from "../db.js";
-import { agentSession, agentStep } from "../schema.js";
+import { agentSession, agentStep, device as deviceTable } from "../schema.js";
 import { eq } from "drizzle-orm";
 import type { UIElement, ActionDecision } from "@droidclaw/shared";
 
@@ -42,6 +42,8 @@ export interface AgentLoopOptions {
   originalGoal?: string;
   llmConfig: LLMConfig;
   maxSteps?: number;
+  /** Abort signal for cancellation */
+  signal?: AbortSignal;
   onStep?: (step: AgentStep) => void;
   onComplete?: (result: AgentResult) => void;
 }
@@ -224,6 +226,7 @@ export async function runAgentLoop(
     originalGoal,
     llmConfig,
     maxSteps = 30,
+    signal,
     onStep,
     onComplete,
   } = options;
@@ -238,6 +241,28 @@ export async function runAgentLoop(
   let stuckCount = 0;
   const recentActions: string[] = [];
   let lastActionFeedback = "";
+
+  // Fetch installed apps from device metadata for LLM context
+  let installedAppsContext = "";
+  if (persistentDeviceId) {
+    try {
+      const rows = await db
+        .select({ info: deviceTable.deviceInfo })
+        .from(deviceTable)
+        .where(eq(deviceTable.id, persistentDeviceId))
+        .limit(1);
+      const info = rows[0]?.info as Record<string, unknown> | null;
+      const apps = info?.installedApps as Array<{ packageName: string; label: string }> | undefined;
+      if (apps && apps.length > 0) {
+        installedAppsContext =
+          `\nINSTALLED_APPS (use exact packageName for "launch" action):\n` +
+          apps.map((a) => `  ${a.label}: ${a.packageName}`).join("\n") +
+          "\n";
+      }
+    } catch {
+      // Non-critical — continue without apps context
+    }
+  }
 
   // Persist session to DB
   if (persistentDeviceId) {
@@ -268,6 +293,12 @@ export async function runAgentLoop(
 
   try {
     for (let step = 0; step < maxSteps; step++) {
+      // Check for cancellation
+      if (signal?.aborted) {
+        console.log(`[Agent ${sessionId}] Stopped by user at step ${step + 1}`);
+        break;
+      }
+
       stepsUsed = step + 1;
 
       // ── 1. Get screen state from device ─────────────────────
@@ -371,6 +402,7 @@ export async function runAgentLoop(
       let userPrompt =
         `GOAL: ${goal}\n\n` +
         `STEP: ${step + 1}/${maxSteps}\n\n` +
+        installedAppsContext +
         foregroundLine +
         actionFeedbackLine +
         `SCREEN_CONTEXT:\n${JSON.stringify(elements, null, 2)}` +

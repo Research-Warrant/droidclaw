@@ -1,14 +1,17 @@
 import { Hono } from "hono";
+import { eq } from "drizzle-orm";
 import { sessionMiddleware, type AuthEnv } from "../middleware/auth.js";
 import { sessions } from "../ws/sessions.js";
 import { runAgentLoop, type AgentLoopOptions } from "../agent/loop.js";
 import type { LLMConfig } from "../agent/llm.js";
+import { db } from "../db.js";
+import { llmConfig as llmConfigTable } from "../schema.js";
 
 const goals = new Hono<AuthEnv>();
 goals.use("*", sessionMiddleware);
 
-/** Track running agent sessions so we can prevent duplicates */
-const activeSessions = new Map<string, { sessionId: string; goal: string }>();
+/** Track running agent sessions so we can prevent duplicates and cancel them */
+const activeSessions = new Map<string, { sessionId: string; goal: string; abort: AbortController }>();
 
 goals.post("/", async (c) => {
   const user = c.get("user");
@@ -46,15 +49,39 @@ goals.post("/", async (c) => {
     );
   }
 
-  // Build LLM config from request body or environment defaults
-  const llmConfig: LLMConfig = {
-    provider: body.llmProvider ?? process.env.LLM_PROVIDER ?? "openai",
-    apiKey: body.llmApiKey ?? process.env.LLM_API_KEY ?? "",
-    model: body.llmModel,
-  };
+  // Build LLM config: request body → user's DB config → env defaults
+  let llmCfg: LLMConfig;
 
-  if (!llmConfig.apiKey) {
-    return c.json({ error: "LLM API key is required (provide llmApiKey or set LLM_API_KEY env var)" }, 400);
+  if (body.llmApiKey) {
+    llmCfg = {
+      provider: body.llmProvider ?? process.env.LLM_PROVIDER ?? "openai",
+      apiKey: body.llmApiKey,
+      model: body.llmModel,
+    };
+  } else {
+    // Fetch user's saved LLM config from DB (same as device WS handler)
+    const configs = await db
+      .select()
+      .from(llmConfigTable)
+      .where(eq(llmConfigTable.userId, user.id))
+      .limit(1);
+
+    if (configs.length > 0) {
+      const cfg = configs[0];
+      llmCfg = {
+        provider: cfg.provider,
+        apiKey: cfg.apiKey,
+        model: body.llmModel ?? cfg.model ?? undefined,
+      };
+    } else if (process.env.LLM_API_KEY) {
+      llmCfg = {
+        provider: process.env.LLM_PROVIDER ?? "openai",
+        apiKey: process.env.LLM_API_KEY,
+        model: body.llmModel,
+      };
+    } else {
+      return c.json({ error: "No LLM provider configured. Set it up in the web dashboard Settings." }, 400);
+    }
   }
 
   const options: AgentLoopOptions = {
@@ -62,16 +89,20 @@ goals.post("/", async (c) => {
     persistentDeviceId: device.persistentDeviceId,
     userId: user.id,
     goal: body.goal,
-    llmConfig,
+    llmConfig: llmCfg,
     maxSteps: body.maxSteps,
   };
+
+  // Create abort controller for this session
+  const abort = new AbortController();
+  options.signal = abort.signal;
 
   // Start the agent loop in the background (fire-and-forget).
   // The client observes progress via the /ws/dashboard WebSocket.
   const loopPromise = runAgentLoop(options);
 
   // Track as active until it completes
-  const sessionPlaceholder = { sessionId: "pending", goal: body.goal };
+  const sessionPlaceholder = { sessionId: "pending", goal: body.goal, abort };
   activeSessions.set(trackingKey, sessionPlaceholder);
 
   loopPromise
@@ -94,6 +125,35 @@ goals.post("/", async (c) => {
     goal: body.goal,
     status: "started",
   });
+});
+
+goals.post("/stop", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json<{ deviceId: string }>();
+
+  if (!body.deviceId) {
+    return c.json({ error: "deviceId is required" }, 400);
+  }
+
+  // Look up device to verify ownership
+  const device = sessions.getDevice(body.deviceId)
+    ?? sessions.getDeviceByPersistentId(body.deviceId);
+  if (!device) {
+    return c.json({ error: "device not connected" }, 404);
+  }
+  if (device.userId !== user.id) {
+    return c.json({ error: "device does not belong to you" }, 403);
+  }
+
+  const trackingKey = device.persistentDeviceId ?? device.deviceId;
+  const active = activeSessions.get(trackingKey);
+  if (!active) {
+    return c.json({ error: "no agent running on this device" }, 404);
+  }
+
+  active.abort.abort();
+  console.log(`[Agent] Stop requested for device ${body.deviceId}`);
+  return c.json({ status: "stopping" });
 });
 
 export { goals };

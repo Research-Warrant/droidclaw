@@ -59,6 +59,18 @@ data class HeartbeatMessage(
 )
 
 @Serializable
+data class InstalledAppInfo(
+    val packageName: String,
+    val label: String
+)
+
+@Serializable
+data class AppsMessage(
+    val type: String = "apps",
+    val apps: List<InstalledAppInfo>
+)
+
+@Serializable
 data class ServerMessage(
     val type: String,
     val requestId: String? = null,

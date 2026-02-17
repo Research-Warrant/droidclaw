@@ -41,12 +41,21 @@ class DroidClawAccessibilityService : AccessibilityService() {
     }
 
     fun getScreenTree(): List<UIElement> {
-        val delays = longArrayOf(50, 100, 200)
+        // Retry with increasing delays — apps like Contacts on Vivo
+        // can take 500ms+ to render after a cold launch
+        val delays = longArrayOf(50, 100, 200, 300, 500)
         for (delayMs in delays) {
             val root = rootInActiveWindow
             if (root != null) {
                 try {
                     val elements = ScreenTreeBuilder.capture(root)
+                    // If we got a root but zero elements, the app may still be loading.
+                    // Retry unless this is the last attempt.
+                    if (elements.isEmpty() && delayMs < delays.last()) {
+                        root.recycle()
+                        runBlocking { delay(delayMs) }
+                        continue
+                    }
                     lastScreenTree.value = elements
                     return elements
                 } finally {
@@ -55,7 +64,7 @@ class DroidClawAccessibilityService : AccessibilityService() {
             }
             runBlocking { delay(delayMs) }
         }
-        Log.w(TAG, "rootInActiveWindow null after retries")
+        Log.w(TAG, "rootInActiveWindow null or empty after retries")
         return emptyList()
     }
 

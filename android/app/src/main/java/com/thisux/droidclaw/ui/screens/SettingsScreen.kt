@@ -51,7 +51,7 @@ fun SettingsScreen() {
     val scope = rememberCoroutineScope()
 
     val apiKey by app.settingsStore.apiKey.collectAsState(initial = "")
-    val serverUrl by app.settingsStore.serverUrl.collectAsState(initial = "wss://localhost:8080")
+    val serverUrl by app.settingsStore.serverUrl.collectAsState(initial = "ws://localhost:8080")
 
     var editingApiKey by remember(apiKey) { mutableStateOf(apiKey) }
     var editingServerUrl by remember(serverUrl) { mutableStateOf(serverUrl) }

@@ -227,7 +227,7 @@ export async function handleDeviceMessage(
       // Preprocess: handle simple goals directly, or extract "open X" prefix
       let effectiveGoal = goal;
       try {
-        const preResult = await preprocessGoal(deviceId, goal);
+        const preResult = await preprocessGoal(deviceId, goal, persistentDeviceId);
         if (preResult.handled) {
           await new Promise((r) => setTimeout(r, 1500));
 
@@ -325,6 +325,26 @@ export async function handleDeviceMessage(
     }
 
     case "pong": {
+      break;
+    }
+
+    case "apps": {
+      const persistentDeviceId = ws.data.persistentDeviceId;
+      if (persistentDeviceId) {
+        const apps = (msg as unknown as { apps: Array<{ packageName: string; label: string }> }).apps;
+        // Merge apps into existing deviceInfo
+        db.update(device)
+          .set({
+            deviceInfo: {
+              ...(await db.select({ info: device.deviceInfo }).from(device).where(eq(device.id, persistentDeviceId)).limit(1).then(r => (r[0]?.info as Record<string, unknown>) ?? {})),
+              installedApps: apps,
+            },
+          })
+          .where(eq(device.id, persistentDeviceId))
+          .catch((err) => console.error(`[DB] Failed to store installed apps: ${err}`));
+
+        console.log(`[Device] Received ${apps.length} installed apps for device ${persistentDeviceId}`);
+      }
       break;
     }
 

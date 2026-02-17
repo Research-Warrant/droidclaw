@@ -1,5 +1,6 @@
 import * as v from 'valibot';
-import { query, getRequestEvent } from '$app/server';
+import { query, command, getRequestEvent } from '$app/server';
+import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';
 import { device, agentSession, agentStep } from '$lib/server/db/schema';
 import { eq, desc, and, count, avg, sql, inArray } from 'drizzle-orm';
@@ -85,7 +86,8 @@ export const getDevice = query(v.string(), async (deviceId) => {
 		screenHeight: (info?.screenHeight as number) ?? null,
 		batteryLevel: (info?.batteryLevel as number) ?? null,
 		isCharging: (info?.isCharging as boolean) ?? false,
-		lastSeen: d.lastSeen?.toISOString() ?? d.createdAt.toISOString()
+		lastSeen: d.lastSeen?.toISOString() ?? d.createdAt.toISOString(),
+		installedApps: (info?.installedApps as Array<{ packageName: string; label: string }>) ?? []
 	};
 });
 
@@ -153,5 +155,39 @@ export const listSessionSteps = query(
 			.orderBy(agentStep.stepNumber);
 
 		return steps;
+	}
+);
+
+// ─── Commands (write operations) ─────────────────────────────
+
+const SERVER_URL = () => env.SERVER_URL || 'http://localhost:8080';
+
+/** Forward a request to the DroidClaw server with auth cookies */
+async function serverFetch(path: string, body: Record<string, unknown>) {
+	const { request } = getRequestEvent();
+	const res = await fetch(`${SERVER_URL()}${path}`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			cookie: request.headers.get('cookie') ?? ''
+		},
+		body: JSON.stringify(body)
+	});
+	const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+	if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
+	return data;
+}
+
+export const submitGoal = command(
+	v.object({ deviceId: v.string(), goal: v.string() }),
+	async ({ deviceId, goal }) => {
+		return serverFetch('/goals', { deviceId, goal });
+	}
+);
+
+export const stopGoal = command(
+	v.object({ deviceId: v.string() }),
+	async ({ deviceId }) => {
+		return serverFetch('/goals/stop', { deviceId });
 	}
 );
