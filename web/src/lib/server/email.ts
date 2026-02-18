@@ -1,6 +1,9 @@
+import { env } from '$env/dynamic/private';
 import { UseSend } from 'usesend-js';
 
-const usesend = new UseSend(process.env.USESEND_API_KEY!);
+if (!env.USESEND_API_KEY) throw new Error('USESEND_API_KEY is not set');
+
+const usesend = new UseSend(env.USESEND_API_KEY);
 
 const EMAIL_FROM = 'noreply@app.droidclaw.ai';
 

@@ -23,7 +23,8 @@ export const login = form(loginSchema, async (user) => {
 		throw err;
 	}
 	const next = url.searchParams.get('redirect') || '/dashboard';
-	redirect(303, next);
+	const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+	redirect(303, safeNext);
 });
 
 export const signout = form(async () => {
