@@ -13,6 +13,7 @@
     "build:agent": "bun build src/kernel.ts --outdir dist --target bun",
     "build:web": "bun run --cwd web build",
     "dev:web": "bun run --cwd web dev",
+    "start:server": "bun run --cwd server start",
     "dev:server": "bun run --cwd server dev",
     "db:push": "bun run --cwd web db:push",
     "typecheck": "tsc --noEmit"
