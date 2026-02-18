@@ -54,17 +54,19 @@ export function isSkillAction(action: string): boolean {
 export async function executeSkill(
   deviceId: string,
   action: SkillAction,
-  currentElements: UIElement[]
+  currentElements: UIElement[],
+  screenWidth = 1080,
+  screenHeight = 2400
 ): Promise<SkillResult> {
   switch (action.action) {
     case "copy_visible_text":
       return copyVisibleText(deviceId, action, currentElements);
     case "find_and_tap":
-      return findAndTap(deviceId, action, currentElements);
+      return findAndTap(deviceId, action, currentElements, screenWidth, screenHeight);
     case "submit_message":
       return submitMessage(deviceId, currentElements);
     case "read_screen":
-      return readScreen(deviceId, currentElements);
+      return readScreen(deviceId, currentElements, screenWidth, screenHeight);
     case "wait_for_content":
       return waitForContent(deviceId, currentElements);
     case "compose_email":
@@ -93,11 +95,17 @@ async function tap(deviceId: string, x: number, y: number): Promise<void> {
   await sessions.sendCommand(deviceId, { type: "tap", x, y });
 }
 
-async function swipeDown(deviceId: string): Promise<void> {
-  // Scroll down = swipe from bottom to top (1080px wide screen defaults)
+async function swipeDown(
+  deviceId: string,
+  screenWidth = 1080,
+  screenHeight = 2400
+): Promise<void> {
+  const cx = Math.round(screenWidth * 0.5);
+  const topY = Math.round(screenHeight * 0.167);
+  const bottomY = Math.round(screenHeight * 0.667);
   await sessions.sendCommand(deviceId, {
     type: "swipe",
-    x1: 540, y1: 1600, x2: 540, y2: 400,
+    x1: cx, y1: bottomY, x2: cx, y2: topY,
   });
 }
 
@@ -187,7 +195,9 @@ async function copyVisibleText(
 async function findAndTap(
   deviceId: string,
   action: SkillAction,
-  elements: UIElement[]
+  elements: UIElement[],
+  screenWidth = 1080,
+  screenHeight = 2400
 ): Promise<SkillResult> {
   const query = action.query;
   if (!query) {
@@ -206,7 +216,7 @@ async function findAndTap(
       console.log(
         `[Skill] find_and_tap: "${query}" not visible, scrolling down (${i + 1}/${maxScrolls})`
       );
-      await swipeDown(deviceId);
+      await swipeDown(deviceId, screenWidth, screenHeight);
       await sleep(1200);
 
       const { elements: freshElements } = await getScreen(deviceId);
@@ -319,7 +329,9 @@ async function submitMessage(
 
 async function readScreen(
   deviceId: string,
-  elements: UIElement[]
+  elements: UIElement[],
+  screenWidth = 1080,
+  screenHeight = 2400
 ): Promise<SkillResult> {
   const allTexts: string[] = [];
   const seenTexts = new Set<string>();
@@ -344,7 +356,7 @@ async function readScreen(
   let scrollsDone = 0;
 
   for (let i = 0; i < maxScrolls; i++) {
-    await swipeDown(deviceId);
+    await swipeDown(deviceId, screenWidth, screenHeight);
     await sleep(1200);
     scrollsDone++;
 

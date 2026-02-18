@@ -126,9 +126,14 @@ function diffScreenState(
  * Maps an ActionDecision to a WebSocket command object for the device.
  * The device companion app receives these and executes the corresponding
  * ADB/accessibility action.
+ *
+ * @param screenWidth  Device screen width in px (from DeviceInfo)
+ * @param screenHeight Device screen height in px (from DeviceInfo)
  */
 function actionToCommand(
-  action: ActionDecision
+  action: ActionDecision,
+  screenWidth = 1080,
+  screenHeight = 2400
 ): Record<string, unknown> {
   switch (action.action) {
     case "tap":
@@ -152,15 +157,22 @@ function actionToCommand(
 
     case "swipe":
     case "scroll": {
-      // Map scroll direction to swipe coordinates (default 1080px wide screen)
+      // Compute swipe coordinates proportionally from device screen size
+      const cx = Math.round(screenWidth * 0.5);
+      const cy = Math.round(screenHeight * 0.5);
+      const topY = Math.round(screenHeight * 0.167);
+      const bottomY = Math.round(screenHeight * 0.667);
+      const leftX = Math.round(screenWidth * 0.167);
+      const rightX = Math.round(screenWidth * 0.833);
+
       const dir = action.direction ?? "down";
-      let x1 = 540, y1 = 1600, x2 = 540, y2 = 400;
+      let x1 = cx, y1 = bottomY, x2 = cx, y2 = topY;
       if (dir === "up") {
-        y1 = 400; y2 = 1600; // swipe from top to bottom = scroll up
+        y1 = topY; y2 = bottomY; // swipe from top to bottom = scroll up
       } else if (dir === "left") {
-        x1 = 900; y1 = 1200; x2 = 180; y2 = 1200;
+        x1 = rightX; y1 = cy; x2 = leftX; y2 = cy;
       } else if (dir === "right") {
-        x1 = 180; y1 = 1200; x2 = 900; y2 = 1200;
+        x1 = leftX; y1 = cy; x2 = rightX; y2 = cy;
       }
       // dir === "down" uses defaults: swipe from bottom to top = scroll down
       return { type: "swipe", x1, y1, x2, y2 };
@@ -313,6 +325,12 @@ export async function runAgentLoop(
     goal: originalGoal ?? goal,
     deviceId: persistentDeviceId ?? deviceId,
   });
+
+  // Get device screen dimensions for accurate swipe coordinates
+  const connectedDevice = sessions.getDevice(deviceId);
+  const screenWidth = connectedDevice?.deviceInfo?.screenWidth ?? 1080;
+  const screenHeight = connectedDevice?.deviceInfo?.screenHeight ?? 2400;
+  console.log(`[Agent ${sessionId}] Device screen: ${screenWidth}x${screenHeight}`);
 
   let stepsUsed = 0;
   let success = false;
@@ -576,12 +594,14 @@ export async function runAgentLoop(
           const skillResult = await executeSkill(
             deviceId,
             action as unknown as Record<string, unknown> & { action: string },
-            elements
+            elements,
+            screenWidth,
+            screenHeight
           );
           lastActionFeedback = `${actionSig} -> ${skillResult.success ? "OK" : "FAILED"}: ${skillResult.message}`;
         } else {
           // Regular action: map to WebSocket command and send to device
-          const command = actionToCommand(action);
+          const command = actionToCommand(action, screenWidth, screenHeight);
           const result = (await sessions.sendCommand(deviceId, command)) as {
             success?: boolean;
             error?: string;
