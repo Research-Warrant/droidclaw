@@ -1,5 +1,6 @@
 package com.thisux.droidclaw.overlay
 
+import android.content.Intent
 import android.graphics.PixelFormat
 import android.view.Gravity
 import android.view.MotionEvent
@@ -13,6 +14,7 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.thisux.droidclaw.MainActivity
 
 class AgentOverlay(private val service: LifecycleService) {
 
@@ -69,6 +71,7 @@ class AgentOverlay(private val service: LifecycleService) {
         var initialY = 0
         var initialTouchX = 0f
         var initialTouchY = 0f
+        var isDragging = false
 
         view.setOnTouchListener { _, event ->
             when (event.action) {
@@ -77,12 +80,27 @@ class AgentOverlay(private val service: LifecycleService) {
                     initialY = layoutParams.y
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
+                    isDragging = false
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    layoutParams.x = initialX + (event.rawX - initialTouchX).toInt()
-                    layoutParams.y = initialY + (event.rawY - initialTouchY).toInt()
+                    val dx = (event.rawX - initialTouchX).toInt()
+                    val dy = (event.rawY - initialTouchY).toInt()
+                    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) isDragging = true
+                    layoutParams.x = initialX + dx
+                    layoutParams.y = initialY + dy
                     windowManager.updateViewLayout(view, layoutParams)
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!isDragging) {
+                        val intent = Intent(service, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                        }
+                        service.startActivity(intent)
+                    }
                     true
                 }
                 else -> false
