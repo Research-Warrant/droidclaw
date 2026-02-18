@@ -57,8 +57,10 @@ fun SettingsScreen() {
     val apiKey by app.settingsStore.apiKey.collectAsState(initial = "")
     val serverUrl by app.settingsStore.serverUrl.collectAsState(initial = "wss://tunnel.droidclaw.ai")
 
-    var editingApiKey by remember(apiKey) { mutableStateOf(apiKey) }
-    var editingServerUrl by remember(serverUrl) { mutableStateOf(serverUrl) }
+    var editingApiKey by remember { mutableStateOf<String?>(null) }
+    val displayApiKey = editingApiKey ?: apiKey
+    var editingServerUrl by remember { mutableStateOf<String?>(null) }
+    val displayServerUrl = editingServerUrl ?: serverUrl
 
     val isAccessibilityEnabled by DroidClawAccessibilityService.isRunning.collectAsState()
     val isCaptureAvailable by ScreenCaptureManager.isAvailable.collectAsState()
@@ -96,31 +98,41 @@ fun SettingsScreen() {
         Text("Settings", style = MaterialTheme.typography.headlineMedium)
 
         OutlinedTextField(
-            value = editingApiKey,
+            value = displayApiKey,
             onValueChange = { editingApiKey = it },
             label = { Text("API Key") },
             modifier = Modifier.fillMaxWidth(),
             visualTransformation = PasswordVisualTransformation(),
             singleLine = true
         )
-        if (editingApiKey != apiKey) {
+        if (editingApiKey != null && editingApiKey != apiKey) {
             OutlinedButton(
-                onClick = { scope.launch { app.settingsStore.setApiKey(editingApiKey) } }
+                onClick = {
+                    scope.launch {
+                        app.settingsStore.setApiKey(displayApiKey)
+                        editingApiKey = null
+                    }
+                }
             ) {
                 Text("Save API Key")
             }
         }
 
         OutlinedTextField(
-            value = editingServerUrl,
+            value = displayServerUrl,
             onValueChange = { editingServerUrl = it },
             label = { Text("Server URL") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
-        if (editingServerUrl != serverUrl) {
+        if (editingServerUrl != null && editingServerUrl != serverUrl) {
             OutlinedButton(
-                onClick = { scope.launch { app.settingsStore.setServerUrl(editingServerUrl) } }
+                onClick = {
+                    scope.launch {
+                        app.settingsStore.setServerUrl(displayServerUrl)
+                        editingServerUrl = null
+                    }
+                }
             ) {
                 Text("Save Server URL")
             }
