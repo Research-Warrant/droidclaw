@@ -5,7 +5,7 @@ import { signupSchema, loginSchema } from '$lib/schema/auth';
 
 export const signup = form(signupSchema, async (user) => {
 	await auth.api.signUpEmail({ body: user });
-	redirect(307, '/dashboard');
+	redirect(307, '/verify-email');
 });
 
 export const login = form(loginSchema, async (user) => {
