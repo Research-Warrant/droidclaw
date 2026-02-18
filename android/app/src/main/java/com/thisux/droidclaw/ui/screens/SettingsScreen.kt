@@ -49,7 +49,6 @@ import com.thisux.droidclaw.DroidClawApp
 import com.thisux.droidclaw.accessibility.DroidClawAccessibilityService
 import com.thisux.droidclaw.capture.ScreenCaptureManager
 import com.thisux.droidclaw.util.BatteryOptimization
-import com.thisux.droidclaw.workflow.WorkflowNotificationService
 import kotlinx.coroutines.launch
 
 @Composable
@@ -77,9 +76,6 @@ fun SettingsScreen() {
     }
     var isBatteryExempt by remember { mutableStateOf(BatteryOptimization.isIgnoringBatteryOptimizations(context)) }
     var hasOverlayPermission by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
-    var isNotificationListenerEnabled by remember {
-        mutableStateOf(WorkflowNotificationService.isEnabled(context))
-    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -90,7 +86,6 @@ fun SettingsScreen() {
                 hasCaptureConsent = isCaptureAvailable || ScreenCaptureManager.hasConsent()
                 isBatteryExempt = BatteryOptimization.isIgnoringBatteryOptimizations(context)
                 hasOverlayPermission = Settings.canDrawOverlays(context)
-                isNotificationListenerEnabled = WorkflowNotificationService.isEnabled(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -205,16 +200,6 @@ fun SettingsScreen() {
             }
         )
 
-        ChecklistItem(
-            label = "Notification listener (for workflows)",
-            isOk = isNotificationListenerEnabled,
-            actionLabel = "Enable",
-            onAction = {
-                context.startActivity(
-                    Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                )
-            }
-        )
     }
 }
 
