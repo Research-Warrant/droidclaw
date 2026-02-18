@@ -75,7 +75,7 @@ fun PermissionStatusBar(onNavigateToSettings: () -> Unit) {
     }
 
     val allOk = apiKey.isNotBlank() && isAccessibilityEnabled && hasCaptureConsent
-            && isBatteryExempt && hasOverlayPermission
+            && hasOverlayPermission
 
     if (allOk) {
         Icon(
@@ -95,7 +95,6 @@ fun PermissionStatusBar(onNavigateToSettings: () -> Unit) {
             if (apiKey.isBlank()) StatusDot(StatusRed)
             if (!isAccessibilityEnabled) StatusDot(StatusRed)
             if (!hasCaptureConsent) StatusDot(StatusRed)
-            if (!isBatteryExempt) StatusDot(StatusRed)
             if (!hasOverlayPermission) StatusDot(StatusRed)
         }
     }
