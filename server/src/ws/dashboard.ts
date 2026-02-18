@@ -1,7 +1,5 @@
 import type { ServerWebSocket } from "bun";
-import { db } from "../db.js";
-import { session as sessionTable } from "../schema.js";
-import { eq } from "drizzle-orm";
+import { auth } from "../auth.js";
 import { sessions, type WebSocketData } from "./sessions.js";
 
 interface DashboardAuthMessage {
@@ -36,19 +34,17 @@ export async function handleDashboardMessage(
         return;
       }
 
-      // Look up session directly in DB
-      const rows = await db
-        .select({ userId: sessionTable.userId })
-        .from(sessionTable)
-        .where(eq(sessionTable.token, token))
-        .limit(1);
+      // Validate session via better-auth
+      const session = await auth.api.getSession({
+        headers: new Headers({ cookie: `better-auth.session_token=${token}` }),
+      });
 
-      if (rows.length === 0) {
+      if (!session) {
         ws.send(JSON.stringify({ type: "auth_error", message: "Invalid session" }));
         return;
       }
 
-      const userId = rows[0].userId;
+      const userId = session.user.id;
 
       // Mark connection as authenticated
       ws.data.authenticated = true;
