@@ -6,20 +6,23 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.thisux.droidclaw.MainActivity
+import com.thisux.droidclaw.model.OverlayMode
+import com.thisux.droidclaw.ui.theme.DroidClawTheme
 
 class AgentOverlay(private val service: LifecycleService) {
 
     private val windowManager = service.getSystemService(WindowManager::class.java)
-    private var composeView: ComposeView? = null
 
     private val savedStateOwner = object : SavedStateRegistryOwner {
         private val controller = SavedStateRegistryController.create(this)
@@ -28,7 +31,28 @@ class AgentOverlay(private val service: LifecycleService) {
         init { controller.performRestore(null) }
     }
 
-    private val layoutParams = WindowManager.LayoutParams(
+    // ── State ───────────────────────────────────────────────
+    var mode = mutableStateOf(OverlayMode.Idle)
+        private set
+    var transcript = mutableStateOf("")
+        private set
+
+    // ── Callbacks (set by ConnectionService) ────────────────
+    var onVoiceSend: ((String) -> Unit)? = null
+    var onVoiceCancel: (() -> Unit)? = null
+    var onAudioChunk: ((String) -> Unit)? = null
+
+    // ── Views ───────────────────────────────────────────────
+    private var pillView: ComposeView? = null
+    private var borderView: ComposeView? = null
+    private var voicePanelView: ComposeView? = null
+
+    // ── Voice recorder ──────────────────────────────────────
+    private var voiceRecorder: VoiceRecorder? = null
+
+    // ── Layout params ───────────────────────────────────────
+
+    private val pillParams = WindowManager.LayoutParams(
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -40,8 +64,98 @@ class AgentOverlay(private val service: LifecycleService) {
         y = 200
     }
 
+    private val borderParams = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSLUCENT
+    )
+
+    private val voicePanelParams = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSLUCENT
+    )
+
+    // ── Public API ──────────────────────────────────────────
+
     fun show() {
-        if (composeView != null) return
+        if (pillView != null) return
+        showPill()
+    }
+
+    fun hide() {
+        hidePill()
+        hideVoiceOverlay()
+    }
+
+    fun destroy() {
+        hide()
+        voiceRecorder?.stop()
+        voiceRecorder = null
+    }
+
+    fun startListening() {
+        val recorder = VoiceRecorder(
+            scope = service.lifecycleScope,
+            onChunk = { base64 -> onAudioChunk?.invoke(base64) }
+        )
+        if (!recorder.hasPermission(service)) {
+            val intent = Intent(service, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("request_audio_permission", true)
+            }
+            service.startActivity(intent)
+            return
+        }
+
+        mode.value = OverlayMode.Listening
+        transcript.value = ""
+
+        hidePill()
+        showVoiceOverlay()
+
+        voiceRecorder = recorder
+        voiceRecorder?.start()
+    }
+
+    fun sendVoice() {
+        voiceRecorder?.stop()
+        voiceRecorder = null
+        mode.value = OverlayMode.Executing
+        hideVoiceOverlay()
+        showPill()
+        onVoiceSend?.invoke(transcript.value)
+    }
+
+    fun cancelVoice() {
+        voiceRecorder?.stop()
+        voiceRecorder = null
+        mode.value = OverlayMode.Idle
+        hideVoiceOverlay()
+        showPill()
+        onVoiceCancel?.invoke()
+    }
+
+    fun updateTranscript(text: String) {
+        transcript.value = text
+    }
+
+    fun returnToIdle() {
+        mode.value = OverlayMode.Idle
+    }
+
+    // ── Private: Pill overlay ───────────────────────────────
+
+    private fun showPill() {
+        if (pillView != null) return
 
         val view = ComposeView(service).apply {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -51,20 +165,57 @@ class AgentOverlay(private val service: LifecycleService) {
             setupDrag(this)
         }
 
-        composeView = view
-        windowManager.addView(view, layoutParams)
+        pillView = view
+        windowManager.addView(view, pillParams)
     }
 
-    fun hide() {
-        composeView?.let {
-            windowManager.removeView(it)
+    private fun hidePill() {
+        pillView?.let { windowManager.removeView(it) }
+        pillView = null
+    }
+
+    // ── Private: Voice overlay (border + panel) ─────────────
+
+    private fun showVoiceOverlay() {
+        if (borderView != null) return
+
+        val border = ComposeView(service).apply {
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            setViewTreeLifecycleOwner(service)
+            setViewTreeSavedStateRegistryOwner(savedStateOwner)
+            setContent {
+                DroidClawTheme { GradientBorder() }
+            }
         }
-        composeView = null
+        borderView = border
+        windowManager.addView(border, borderParams)
+
+        val panel = ComposeView(service).apply {
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            setViewTreeLifecycleOwner(service)
+            setViewTreeSavedStateRegistryOwner(savedStateOwner)
+            setContent {
+                DroidClawTheme {
+                    VoiceOverlayContent(
+                        transcript = transcript.value,
+                        onSend = { sendVoice() },
+                        onCancel = { cancelVoice() }
+                    )
+                }
+            }
+        }
+        voicePanelView = panel
+        windowManager.addView(panel, voicePanelParams)
     }
 
-    fun destroy() {
-        hide()
+    private fun hideVoiceOverlay() {
+        borderView?.let { windowManager.removeView(it) }
+        borderView = null
+        voicePanelView?.let { windowManager.removeView(it) }
+        voicePanelView = null
     }
+
+    // ── Private: Drag handling for pill ─────────────────────
 
     private fun setupDrag(view: View) {
         var initialX = 0
@@ -76,8 +227,8 @@ class AgentOverlay(private val service: LifecycleService) {
         view.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    initialX = layoutParams.x
-                    initialY = layoutParams.y
+                    initialX = pillParams.x
+                    initialY = pillParams.y
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
                     isDragging = false
@@ -87,19 +238,23 @@ class AgentOverlay(private val service: LifecycleService) {
                     val dx = (event.rawX - initialTouchX).toInt()
                     val dy = (event.rawY - initialTouchY).toInt()
                     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) isDragging = true
-                    layoutParams.x = initialX + dx
-                    layoutParams.y = initialY + dy
-                    windowManager.updateViewLayout(view, layoutParams)
+                    pillParams.x = initialX + dx
+                    pillParams.y = initialY + dy
+                    windowManager.updateViewLayout(view, pillParams)
                     true
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!isDragging) {
-                        val intent = Intent(service, MainActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                        if (mode.value == OverlayMode.Idle) {
+                            startListening()
+                        } else {
+                            val intent = Intent(service, MainActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                            }
+                            service.startActivity(intent)
                         }
-                        service.startActivity(intent)
                     }
                     true
                 }
