@@ -62,8 +62,19 @@ class CommandRouter(
                 currentSteps.value = currentSteps.value + step
                 Log.d(TAG, "Step ${step.step}: ${step.reasoning}")
             }
+            "transcript_partial" -> {
+                ConnectionService.overlayTranscript.value = msg.text ?: ""
+                ConnectionService.instance?.overlay?.updateTranscript(msg.text ?: "")
+                Log.d(TAG, "Transcript partial: ${msg.text}")
+            }
+            "transcript_final" -> {
+                ConnectionService.overlayTranscript.value = msg.text ?: ""
+                ConnectionService.instance?.overlay?.updateTranscript(msg.text ?: "")
+                Log.d(TAG, "Transcript final: ${msg.text}")
+            }
             "goal_completed" -> {
                 currentGoalStatus.value = if (msg.success == true) GoalStatus.Completed else GoalStatus.Failed
+                ConnectionService.instance?.overlay?.returnToIdle()
                 Log.i(TAG, "Goal completed: success=${msg.success}, steps=${msg.stepsUsed}")
             }
             "goal_failed" -> {

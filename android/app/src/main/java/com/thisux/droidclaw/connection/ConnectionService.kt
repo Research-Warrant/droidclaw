@@ -30,6 +30,11 @@ import android.net.Uri
 import android.provider.Settings
 import com.thisux.droidclaw.model.StopGoalMessage
 import com.thisux.droidclaw.overlay.AgentOverlay
+import com.thisux.droidclaw.model.VoiceStartMessage
+import com.thisux.droidclaw.model.VoiceChunkMessage
+import com.thisux.droidclaw.model.VoiceStopMessage
+import com.thisux.droidclaw.model.OverlayMode
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -47,6 +52,7 @@ class ConnectionService : LifecycleService() {
         val currentGoalStatus = MutableStateFlow(GoalStatus.Idle)
         val currentGoal = MutableStateFlow("")
         val errorMessage = MutableStateFlow<String?>(null)
+        val overlayTranscript = MutableStateFlow("")
         var instance: ConnectionService? = null
 
         const val ACTION_CONNECT = "com.thisux.droidclaw.CONNECT"
@@ -59,13 +65,31 @@ class ConnectionService : LifecycleService() {
     private var commandRouter: CommandRouter? = null
     private var captureManager: ScreenCaptureManager? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private var overlay: AgentOverlay? = null
+    internal var overlay: AgentOverlay? = null
 
     override fun onCreate() {
         super.onCreate()
         instance = this
         createNotificationChannel()
         overlay = AgentOverlay(this)
+        overlay?.onAudioChunk = { base64 ->
+            webSocket?.sendTyped(VoiceChunkMessage(data = base64))
+        }
+        overlay?.onVoiceSend = { _ ->
+            webSocket?.sendTyped(VoiceStopMessage(action = "send"))
+        }
+        overlay?.onVoiceCancel = {
+            webSocket?.sendTyped(VoiceStopMessage(action = "cancel"))
+        }
+        overlay?.let { ov ->
+            lifecycleScope.launch {
+                snapshotFlow { ov.mode.value }.collect { mode ->
+                    if (mode == OverlayMode.Listening) {
+                        webSocket?.sendTyped(VoiceStartMessage())
+                    }
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
