@@ -6,6 +6,12 @@ import { apikey, llmConfig, device } from "../schema.js";
 import { sessions, type WebSocketData } from "./sessions.js";
 import { runPipeline } from "../agent/pipeline.js";
 import type { LLMConfig } from "../agent/llm.js";
+import {
+  handleVoiceStart,
+  handleVoiceChunk,
+  handleVoiceSend,
+  handleVoiceCancel,
+} from "./voice.js";
 
 /**
  * Hash an API key the same way better-auth does:
@@ -358,6 +364,104 @@ export async function handleDeviceMessage(
           isCharging: msg.isCharging,
         });
       }
+      break;
+    }
+
+    case "voice_start": {
+      const deviceId = ws.data.deviceId!;
+      const userId = ws.data.userId!;
+
+      // Fetch user's LLM config to get API key for Groq Whisper
+      const configs = await db
+        .select()
+        .from(llmConfig)
+        .where(eq(llmConfig.userId, userId))
+        .limit(1);
+
+      if (configs.length === 0 || !configs[0].apiKey) {
+        sendToDevice(ws, { type: "transcript_final", text: "" });
+        break;
+      }
+
+      handleVoiceStart(ws, deviceId, configs[0].apiKey);
+      break;
+    }
+
+    case "voice_chunk": {
+      const deviceId = ws.data.deviceId!;
+      handleVoiceChunk(deviceId, (msg as unknown as { data: string }).data);
+      break;
+    }
+
+    case "voice_stop": {
+      const deviceId = ws.data.deviceId!;
+      const userId = ws.data.userId!;
+      const voiceAction = (msg as unknown as { action: string }).action;
+
+      if (voiceAction === "cancel") {
+        handleVoiceCancel(deviceId);
+        break;
+      }
+
+      // action === "send" — finalize and fire goal
+      const configs = await db
+        .select()
+        .from(llmConfig)
+        .where(eq(llmConfig.userId, userId))
+        .limit(1);
+
+      const groqKey = configs[0]?.apiKey ?? "";
+      const transcript = await handleVoiceSend(ws, deviceId, groqKey);
+
+      if (transcript) {
+        const persistentDeviceId = ws.data.persistentDeviceId!;
+
+        if (activeSessions.has(deviceId)) {
+          sendToDevice(ws, { type: "goal_failed", message: "Agent already running" });
+          break;
+        }
+
+        const userLlmConfig: LLMConfig = {
+          provider: configs[0].provider,
+          apiKey: configs[0].apiKey,
+          model: configs[0].model ?? undefined,
+        };
+
+        console.log(`[Pipeline] Starting voice goal for device ${deviceId}: ${transcript}`);
+        const abortController = new AbortController();
+        activeSessions.set(deviceId, { goal: transcript, abort: abortController });
+
+        sendToDevice(ws, { type: "goal_started", sessionId: deviceId, goal: transcript });
+
+        runPipeline({
+          deviceId,
+          persistentDeviceId,
+          userId,
+          goal: transcript,
+          llmConfig: userLlmConfig,
+          signal: abortController.signal,
+          onStep(step) {
+            sendToDevice(ws, {
+              type: "step",
+              step: step.stepNumber,
+              action: step.action,
+              reasoning: step.reasoning,
+            });
+          },
+          onComplete(result) {
+            activeSessions.delete(deviceId);
+            sendToDevice(ws, {
+              type: "goal_completed",
+              success: result.success,
+              stepsUsed: result.stepsUsed,
+            });
+          },
+        }).catch((err) => {
+          activeSessions.delete(deviceId);
+          sendToDevice(ws, { type: "goal_failed", message: String(err) });
+        });
+      }
+
       break;
     }
 
