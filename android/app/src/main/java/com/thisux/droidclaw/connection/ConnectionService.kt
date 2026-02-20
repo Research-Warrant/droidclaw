@@ -200,6 +200,16 @@ class ConnectionService : LifecycleService() {
                             (application as DroidClawApp).settingsStore.addRecentGoal(goal)
                         }
                     }
+                    // Auto-reset to idle after showing completed/failed for 3s
+                    if (status == GoalStatus.Completed || status == GoalStatus.Failed) {
+                        launch {
+                            delay(3000)
+                            // Only reset if status hasn't changed (e.g. new goal started)
+                            if (currentGoalStatus.value == status) {
+                                currentGoalStatus.value = GoalStatus.Idle
+                            }
+                        }
+                    }
                 }
             }
             launch { router.currentGoal.collect { currentGoal.value = it } }

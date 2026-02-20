@@ -24,12 +24,8 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,7 +39,6 @@ import com.thisux.droidclaw.connection.ConnectionService
 import com.thisux.droidclaw.model.ConnectionState
 import com.thisux.droidclaw.model.GoalStatus
 import com.thisux.droidclaw.ui.theme.DroidClawTheme
-import kotlinx.coroutines.delay
 
 private val Green = Color(0xFF4CAF50)
 private val Blue = Color(0xFF2196F3)
@@ -58,26 +53,17 @@ fun OverlayContent() {
         val goalStatus by ConnectionService.currentGoalStatus.collectAsState()
         val steps by ConnectionService.currentSteps.collectAsState()
 
-        var displayStatus by remember { mutableStateOf(goalStatus) }
-        LaunchedEffect(goalStatus) {
-            displayStatus = goalStatus
-            if (goalStatus == GoalStatus.Completed || goalStatus == GoalStatus.Failed) {
-                delay(3000)
-                displayStatus = GoalStatus.Idle
-            }
-        }
-
         val isConnected = connectionState == ConnectionState.Connected
-        val isRunning = isConnected && displayStatus == GoalStatus.Running
-        val isIdle = isConnected && displayStatus == GoalStatus.Idle
+        val isRunning = isConnected && goalStatus == GoalStatus.Running
+        val isIdle = isConnected && goalStatus == GoalStatus.Idle
 
         // Status dot color
         val dotColor by animateColorAsState(
             targetValue = when {
                 !isConnected -> Gray
-                displayStatus == GoalStatus.Running -> Red
-                displayStatus == GoalStatus.Completed -> Blue
-                displayStatus == GoalStatus.Failed -> Gray
+                goalStatus == GoalStatus.Running -> Red
+                goalStatus == GoalStatus.Completed -> Blue
+                goalStatus == GoalStatus.Failed -> Gray
                 else -> Green
             },
             label = "dotColor"
@@ -103,7 +89,7 @@ fun OverlayContent() {
         // Status text
         val statusText = when {
             !isConnected -> "offline"
-            displayStatus == GoalStatus.Running -> {
+            goalStatus == GoalStatus.Running -> {
                 val latestStep = steps.lastOrNull()
                 if (latestStep != null) {
                     "${latestStep.step}. ${latestStep.reasoning}"
@@ -111,8 +97,8 @@ fun OverlayContent() {
                     "starting.."
                 }
             }
-            displayStatus == GoalStatus.Completed -> "completed"
-            displayStatus == GoalStatus.Failed -> "failed"
+            goalStatus == GoalStatus.Completed -> "completed"
+            goalStatus == GoalStatus.Failed -> "failed"
             else -> "ready"
         }
 
