@@ -2,16 +2,29 @@ package com.thisux.droidclaw.overlay
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -22,11 +35,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.thisux.droidclaw.R
+import androidx.compose.ui.unit.sp
 import com.thisux.droidclaw.connection.ConnectionService
 import com.thisux.droidclaw.model.ConnectionState
 import com.thisux.droidclaw.model.GoalStatus
@@ -37,13 +51,18 @@ private val Green = Color(0xFF4CAF50)
 private val Blue = Color(0xFF2196F3)
 private val Red = Color(0xFFF44336)
 private val Gray = Color(0xFF9E9E9E)
-private val IconBackground = Color(0xFF1A1A1A)
+private val PillBackground = Color(0xFF1A1A1A)
 
 @Composable
-fun OverlayContent() {
-    DroidClawTheme {
+fun OverlayContent(
+    onTextTap: () -> Unit = {},
+    onMicTap: () -> Unit = {},
+    onStopTap: () -> Unit = {}
+) {
+    DroidClawTheme(darkTheme = true) {
         val connectionState by ConnectionService.connectionState.collectAsState()
         val goalStatus by ConnectionService.currentGoalStatus.collectAsState()
+        val steps by ConnectionService.currentSteps.collectAsState()
 
         var displayStatus by remember { mutableStateOf(goalStatus) }
         LaunchedEffect(goalStatus) {
@@ -55,68 +74,131 @@ fun OverlayContent() {
         }
 
         val isConnected = connectionState == ConnectionState.Connected
+        val isRunning = isConnected && displayStatus == GoalStatus.Running
+        val isIdle = isConnected && displayStatus == GoalStatus.Idle
+        val isDisconnected = !isConnected
 
-        val ringColor by animateColorAsState(
+        // Status dot color
+        val dotColor by animateColorAsState(
             targetValue = when {
-                !isConnected -> Gray
+                isDisconnected -> Gray
                 displayStatus == GoalStatus.Running -> Red
                 displayStatus == GoalStatus.Completed -> Blue
                 displayStatus == GoalStatus.Failed -> Gray
-                else -> Green
+                else -> Green // idle + connected
             },
-            label = "ringColor"
+            label = "dotColor"
         )
 
-        val isRunning = isConnected && displayStatus == GoalStatus.Running
+        // Pulse animation for running state dot
+        val pulseTransition = rememberInfiniteTransition(label = "pulse")
+        val pulseScale by pulseTransition.animateFloat(
+            initialValue = 0.8f,
+            targetValue = 1.3f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseScale"
+        )
 
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(52.dp)
+        // Status text
+        val statusText = when {
+            isDisconnected -> "offline"
+            displayStatus == GoalStatus.Running -> {
+                val latestStep = steps.lastOrNull()
+                if (latestStep != null) {
+                    "${latestStep.step}. ${latestStep.reasoning}"
+                } else {
+                    "running"
+                }
+            }
+            displayStatus == GoalStatus.Completed -> "completed"
+            displayStatus == GoalStatus.Failed -> "failed"
+            else -> "ready" // idle + connected
+        }
+
+        // Text area clickable only when idle or disconnected
+        val textClickable = isIdle || isDisconnected
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .height(40.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(PillBackground)
+                .padding(horizontal = 12.dp)
         ) {
-            // Background circle
+            // Status dot
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(8.dp)
+                    .then(
+                        if (isRunning) Modifier.scale(pulseScale) else Modifier
+                    )
                     .clip(CircleShape)
-                    .background(IconBackground)
+                    .background(dotColor)
             )
 
-            if (isRunning) {
-                // Spinning progress ring
-                val transition = rememberInfiniteTransition(label = "spin")
-                val rotation by transition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = 360f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1200, easing = LinearEasing)
-                    ),
-                    label = "rotation"
-                )
-                CircularProgressIndicator(
-                    modifier = Modifier.size(52.dp),
-                    color = ringColor,
-                    strokeWidth = 3.dp,
-                    strokeCap = StrokeCap.Round
-                )
-            } else {
-                // Static colored ring
-                CircularProgressIndicator(
-                    progress = { 1f },
-                    modifier = Modifier.size(52.dp),
-                    color = ringColor,
-                    strokeWidth = 3.dp,
-                    strokeCap = StrokeCap.Round
-                )
-            }
+            Spacer(modifier = Modifier.width(8.dp))
 
-            // App icon
-            Image(
-                painter = painterResource(R.drawable.ic_launcher_foreground),
-                contentDescription = "DroidClaw",
+            // Status text
+            Text(
+                text = statusText,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
+                    .widthIn(max = 200.dp)
+                    .then(
+                        if (textClickable) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onTextTap
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
             )
+
+            // Right icon (conditional)
+            when {
+                isIdle -> {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Filled.Mic,
+                        contentDescription = "Voice input",
+                        tint = Green,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onMicTap
+                            )
+                    )
+                }
+                isRunning -> {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Stop",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onStopTap
+                            )
+                    )
+                }
+                // disconnected, completed, failed: no icon
+            }
         }
     }
 }
