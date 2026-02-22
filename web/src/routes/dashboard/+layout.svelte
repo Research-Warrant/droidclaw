@@ -30,9 +30,9 @@
 </script>
 
 <div class="flex min-h-screen">
-	<aside class="flex w-64 flex-col bg-stone-100 p-6">
+	<aside class="hidden md:flex w-64 flex-col bg-stone-100 p-6">
 		<div class="mb-8">
-			<h1 class="text-lg font-bold tracking-tight">DroidClaw</h1>
+			<h1 class="text-lg font-bold tracking-tight">DroidClaw<span class="text-stone-400">.ai</span></h1>
 		</div>
 		<nav class="flex flex-col gap-1.5">
 			{#each navItems as item}
@@ -74,11 +74,29 @@
 		</div>
 	</aside>
 
-	<main class="flex-1 overflow-auto p-8">
+	<main class="flex-1 overflow-auto p-4 pb-20 md:p-8 md:pb-8">
 		<div class="mx-auto max-w-5xl">
 			{@render children?.()}
 		</div>
 	</main>
+
+	<!-- Mobile bottom tab bar -->
+	<nav class="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-stone-200 bg-stone-100 px-2 pb-6 pt-2 md:hidden">
+		{#each navItems as item}
+			<a
+				href={item.href}
+				data-umami-event={NAV_SIDEBAR_CLICK}
+				data-umami-event-section={item.label.toLowerCase().replace(' ', '-')}
+				class="flex flex-col items-center gap-0.5 rounded-xl px-4 py-1.5 transition-colors
+					{isActive(item.href, item.exact)
+					? 'text-stone-900'
+					: 'text-stone-400'}"
+			>
+				<Icon icon={item.icon} class="h-6 w-6" />
+				<span class="text-[10px] font-medium">{item.label}</span>
+			</a>
+		{/each}
+	</nav>
 </div>
 
 <Toaster position="bottom-right" />

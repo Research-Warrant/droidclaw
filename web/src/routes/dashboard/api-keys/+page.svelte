@@ -9,7 +9,7 @@
 	let keysPromise = $state(listKeys());
 </script>
 
-<h2 class="mb-6 text-2xl font-bold">API Keys</h2>
+<h2 class="mb-6 text-xl md:text-2xl font-bold">API Keys</h2>
 
 <!-- Create new key -->
 <p class="mb-3 text-sm font-medium text-stone-500">Create new key</p>
@@ -22,7 +22,7 @@
 			toast.success('API key created');
 			track(APIKEY_CREATE);
 		})}
-		class="flex items-end gap-4"
+		class="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4"
 	>
 		<label class="flex flex-1 flex-col gap-1">
 			<span class="text-sm text-stone-600">Key Name</span>
@@ -37,7 +37,7 @@
 		</label>
 		<button
 			type="submit"
-			class="flex items-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-800"
+			class="flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-800"
 		>
 			<Icon icon="solar:add-circle-bold-duotone" class="h-4 w-4" />
 			Create
@@ -55,7 +55,7 @@
 		<p class="mb-3 text-sm text-amber-700">
 			Copy this key now. It will not be shown again.
 		</p>
-		<div class="flex items-center gap-2">
+		<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
 			<code class="flex-1 rounded-lg bg-amber-100 px-3 py-2 font-mono text-sm break-all">
 				{newKeyValue}
 			</code>
@@ -65,7 +65,7 @@
 					toast.success('Copied to clipboard');
 					track(APIKEY_COPY);
 				}}
-				class="flex items-center gap-1.5 rounded-lg border border-amber-300 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
+				class="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-amber-300 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
 			>
 				<Icon icon="solar:copy-bold-duotone" class="h-4 w-4" />
 				Copy
@@ -91,7 +91,7 @@
 	{:then keys}
 		{#if keys && keys.length > 0}
 			{#each keys as key, i (key.id)}
-				<div class="flex items-center justify-between px-6 py-4
+				<div class="flex items-center justify-between px-4 md:px-6 py-4
 					{i > 0 ? 'border-t border-stone-100' : ''}">
 					<div class="flex items-center gap-3">
 						<div class="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100">
@@ -123,7 +123,7 @@
 							class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-500 hover:bg-red-50"
 						>
 							<Icon icon="solar:trash-bin-trash-bold-duotone" class="h-4 w-4" />
-							Delete
+							<span class="hidden sm:inline">Delete</span>
 						</button>
 					</form>
 				</div>

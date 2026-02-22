@@ -92,10 +92,10 @@
 	});
 </script>
 
-<h2 class="mb-6 text-2xl font-bold">Devices</h2>
+<h2 class="mb-6 text-xl md:text-2xl font-bold">Devices</h2>
 
 {#if devices.length === 0}
-	<div class="rounded-2xl bg-white p-10 text-center">
+	<div class="rounded-2xl bg-white p-6 md:p-10 text-center">
 		<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-stone-100">
 			<Icon icon="solar:smartphone-bold-duotone" class="h-6 w-6 text-stone-400" />
 		</div>

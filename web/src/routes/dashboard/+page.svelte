@@ -29,11 +29,11 @@
 	];
 </script>
 
-<h2 class="mb-1 text-2xl font-bold">Dashboard</h2>
+<h2 class="mb-1 text-xl md:text-2xl font-bold">Dashboard</h2>
 <p class="mb-8 text-stone-500">Welcome back, {data.user.name}.</p>
 
 {#if data.plan}
-	<div class="mb-8 flex items-center gap-4 rounded-2xl bg-white p-5">
+	<div class="mb-8 flex items-center gap-4 rounded-2xl bg-white p-4 md:p-5">
 		<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100">
 			<Icon icon="solar:verified-check-bold-duotone" class="h-5 w-5 text-emerald-600" />
 		</div>

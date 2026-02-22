@@ -218,7 +218,7 @@
 			<Icon icon="solar:smartphone-bold-duotone" class="h-5 w-5 {deviceData?.status === 'online' ? 'text-emerald-600' : 'text-stone-400'}" />
 		</div>
 		<div>
-			<h2 class="text-2xl font-bold">{deviceData?.model ?? deviceId.slice(0, 8)}</h2>
+			<h2 class="text-xl md:text-2xl font-bold">{deviceData?.model ?? deviceId.slice(0, 8)}</h2>
 			{#if deviceData?.manufacturer}
 				<p class="text-sm text-stone-500">{deviceData.manufacturer}</p>
 			{/if}
@@ -272,31 +272,31 @@
 			<p class="mb-3 text-sm font-medium text-stone-500">Device info</p>
 			<div class="rounded-2xl bg-white">
 				{#if deviceData?.model}
-					<div class="flex justify-between px-6 py-3.5 text-sm">
+					<div class="flex justify-between px-4 md:px-6 py-3.5 text-sm">
 						<span class="text-stone-500">Model</span>
 						<span class="font-medium text-stone-900">{deviceData.model}</span>
 					</div>
 				{/if}
 				{#if deviceData?.manufacturer}
-					<div class="flex justify-between border-t border-stone-100 px-6 py-3.5 text-sm">
+					<div class="flex justify-between border-t border-stone-100 px-4 md:px-6 py-3.5 text-sm">
 						<span class="text-stone-500">Manufacturer</span>
 						<span class="font-medium text-stone-900">{deviceData.manufacturer}</span>
 					</div>
 				{/if}
 				{#if deviceData?.androidVersion}
-					<div class="flex justify-between border-t border-stone-100 px-6 py-3.5 text-sm">
+					<div class="flex justify-between border-t border-stone-100 px-4 md:px-6 py-3.5 text-sm">
 						<span class="text-stone-500">Android</span>
 						<span class="font-medium text-stone-900">{deviceData.androidVersion}</span>
 					</div>
 				{/if}
 				{#if deviceData?.screenWidth && deviceData?.screenHeight}
-					<div class="flex justify-between border-t border-stone-100 px-6 py-3.5 text-sm">
+					<div class="flex justify-between border-t border-stone-100 px-4 md:px-6 py-3.5 text-sm">
 						<span class="text-stone-500">Resolution</span>
 						<span class="font-medium text-stone-900">{deviceData.screenWidth} &times; {deviceData.screenHeight}</span>
 					</div>
 				{/if}
 				{#if battery !== null && battery >= 0}
-					<div class="flex justify-between border-t border-stone-100 px-6 py-3.5 text-sm">
+					<div class="flex justify-between border-t border-stone-100 px-4 md:px-6 py-3.5 text-sm">
 						<span class="text-stone-500">Battery</span>
 						<span class="flex items-center gap-1.5 font-medium {battery <= 20 ? 'text-red-600' : 'text-stone-900'}">
 							<Icon
@@ -307,7 +307,7 @@
 						</span>
 					</div>
 				{/if}
-				<div class="flex justify-between border-t border-stone-100 px-6 py-3.5 text-sm">
+				<div class="flex justify-between border-t border-stone-100 px-4 md:px-6 py-3.5 text-sm">
 					<span class="text-stone-500">Last seen</span>
 					<span class="font-medium text-stone-900">
 						{deviceData ? relativeTime(deviceData.lastSeen) : '\u2014'}
@@ -320,7 +320,7 @@
 		<div>
 			<p class="mb-3 text-sm font-medium text-stone-500">Stats</p>
 			<div class="rounded-2xl bg-white p-5">
-				<div class="grid grid-cols-3 gap-3 text-center">
+				<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
 					<div class="rounded-xl bg-stone-50 p-4">
 						<div class="mb-1.5 flex justify-center">
 							<div class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100">
@@ -356,7 +356,7 @@
 	<!-- Installed Apps -->
 	{#if deviceData && deviceData.installedApps.length > 0}
 		<div class="mt-6">
-			<div class="mb-3 flex items-center justify-between">
+			<div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 				<p class="text-sm font-medium text-stone-500">
 					Installed apps
 					<span class="text-stone-400">({deviceData.installedApps.length})</span>
@@ -370,21 +370,21 @@
 						type="text"
 						bind:value={appSearch}
 						placeholder="Search apps..."
-						class="w-48 rounded-lg border border-stone-200 bg-white py-1.5 pl-8 pr-2.5 text-xs focus:border-stone-400 focus:outline-none"
+						class="w-full sm:w-48 rounded-lg border border-stone-200 bg-white py-1.5 pl-8 pr-2.5 text-xs focus:border-stone-400 focus:outline-none"
 					/>
 				</div>
 			</div>
 			<div class="max-h-72 overflow-y-auto rounded-2xl bg-white">
 				{#each filteredApps as app, i (app.packageName)}
 					<div
-						class="flex items-center justify-between px-6 py-3 text-sm hover:bg-stone-50
+						class="flex items-center justify-between px-4 md:px-6 py-3 text-sm hover:bg-stone-50
 							{i > 0 ? 'border-t border-stone-100' : ''}"
 					>
 						<span class="font-medium text-stone-900">{app.label}</span>
 						<span class="font-mono text-xs text-stone-400">{app.packageName}</span>
 					</div>
 				{:else}
-					<p class="px-6 py-4 text-xs text-stone-400">No apps match "{appSearch}"</p>
+					<p class="px-4 md:px-6 py-4 text-xs text-stone-400">No apps match "{appSearch}"</p>
 				{/each}
 			</div>
 		</div>
@@ -406,7 +406,7 @@
 				<div class={i > 0 ? 'border-t border-stone-100' : ''}>
 					<button
 						onclick={() => toggleSession(sess.id)}
-						class="flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-stone-50
+						class="flex w-full items-center justify-between px-4 md:px-6 py-4 text-left transition-colors hover:bg-stone-50
 							{i === 0 ? 'rounded-t-2xl' : ''}
 							{i === sessions.length - 1 && expandedSession !== sess.id ? 'rounded-b-2xl' : ''}"
 					>
@@ -441,7 +441,7 @@
 						</span>
 					</button>
 					{#if expandedSession === sess.id}
-						<div class="border-t border-stone-100 bg-stone-50 px-6 py-4
+						<div class="border-t border-stone-100 bg-stone-50 px-4 md:px-6 py-4
 							{i === sessions.length - 1 ? 'rounded-b-2xl' : ''}">
 							{#if sessionSteps.has(sess.id)}
 								<div class="space-y-2.5">
@@ -480,7 +480,7 @@
 	<!-- Goal Input -->
 	<p class="mb-3 text-sm font-medium text-stone-500">Send a goal</p>
 	<div class="mb-6 rounded-2xl bg-white p-6">
-		<div class="flex gap-3">
+		<div class="flex flex-col gap-3 sm:flex-row">
 			<input
 				type="text"
 				bind:value={goal}
@@ -492,7 +492,7 @@
 			{#if runStatus === 'running'}
 				<button
 					onclick={stopGoal}
-					class="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
+					class="flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
 				>
 					<Icon icon="solar:stop-bold" class="h-4 w-4" />
 					Stop
@@ -500,7 +500,7 @@
 			{:else}
 				<button
 					onclick={submitGoal}
-					class="flex items-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-800"
+					class="flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-800"
 				>
 					<Icon icon="solar:play-bold" class="h-4 w-4" />
 					Run
@@ -516,7 +516,7 @@
 		</p>
 		<div class="rounded-2xl bg-white">
 			<!-- Status bar -->
-			<div class="flex items-center justify-between px-6 py-3.5">
+			<div class="flex items-center justify-between px-4 md:px-6 py-3.5">
 				<span class="text-sm font-medium text-stone-900">
 					{steps.length} step{steps.length !== 1 ? 's' : ''}
 				</span>
@@ -541,7 +541,7 @@
 			</div>
 
 			{#if runError}
-				<div class="flex items-center gap-2 border-t border-red-100 bg-red-50 px-6 py-3 text-xs text-red-700">
+				<div class="flex items-center gap-2 border-t border-red-100 bg-red-50 px-4 md:px-6 py-3 text-xs text-red-700">
 					<Icon icon="solar:danger-triangle-bold-duotone" class="h-4 w-4 shrink-0" />
 					{runError}
 				</div>
@@ -549,7 +549,7 @@
 
 			{#if steps.length > 0}
 				{#each steps as s (s.step)}
-					<div class="border-t border-stone-100 px-6 py-3">
+					<div class="border-t border-stone-100 px-4 md:px-6 py-3">
 						<div class="flex items-baseline gap-2.5">
 							<span
 								class="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 font-mono text-[10px] text-stone-500"
@@ -564,7 +564,7 @@
 					</div>
 				{/each}
 			{:else}
-				<div class="flex items-center gap-2 border-t border-stone-100 px-6 py-4 text-xs text-stone-400">
+				<div class="flex items-center gap-2 border-t border-stone-100 px-4 md:px-6 py-4 text-xs text-stone-400">
 					<Icon icon="solar:refresh-circle-bold-duotone" class="h-4 w-4 animate-spin" />
 					Waiting for first step...
 				</div>
