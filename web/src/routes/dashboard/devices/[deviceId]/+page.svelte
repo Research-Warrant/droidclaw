@@ -78,6 +78,15 @@
 	// Run tab state
 	let goal = $state('');
 	let runStatus = $state<'idle' | 'running' | 'completed' | 'failed'>('idle');
+
+	const exampleGoals = [
+		'Open YouTube and search for lofi beats',
+		'Open Settings and enable Wi-Fi',
+		'Open Google Maps and search for nearby coffee shops',
+		'Open the calculator and compute 42 x 17',
+		'Take a screenshot and save it',
+		'Open Chrome and search for today\'s weather'
+	];
 	let currentGoal = $state('');
 	let steps = $state<Array<{ step: number; action: string; reasoning: string }>>([]);
 
@@ -508,6 +517,23 @@
 			{/if}
 		</div>
 	</div>
+
+	<!-- Example Goals -->
+	{#if runStatus === 'idle' && !goal.trim()}
+		<div class="mb-6">
+			<p class="mb-2 text-xs font-medium text-stone-400">Try an example</p>
+			<div class="flex flex-wrap gap-2">
+				{#each exampleGoals as example}
+					<button
+						onclick={() => (goal = example)}
+						class="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-600 transition-colors hover:border-stone-300 hover:bg-stone-50"
+					>
+						{example}
+					</button>
+				{/each}
+			</div>
+		</div>
+	{/if}
 
 	<!-- Live Steps -->
 	{#if steps.length > 0 || runStatus !== 'idle'}

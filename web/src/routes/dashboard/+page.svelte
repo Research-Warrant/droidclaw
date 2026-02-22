@@ -1,6 +1,9 @@
 <script lang="ts">
 	import Icon from '@iconify/svelte';
 	import { DASHBOARD_CARD_CLICK } from '$lib/analytics/events';
+	import { listKeys } from '$lib/api/api-keys.remote';
+	import { getConfig } from '$lib/api/settings.remote';
+	import { listDevices } from '$lib/api/devices.remote';
 
 	let { data } = $props();
 
@@ -27,6 +30,42 @@
 			color: 'bg-purple-100 text-purple-600'
 		}
 	];
+
+	// Setup checklist data
+	const [keys, config, devices] = await Promise.all([listKeys(), getConfig(), listDevices()]);
+	const hasKeys = (keys as unknown[]).length > 0;
+	const hasConfig = config !== null;
+	const hasDevice = (devices as unknown[]).length > 0;
+
+	const checklist = [
+		{
+			label: 'Create an API key',
+			desc: 'Required for device authentication',
+			href: '/dashboard/api-keys',
+			done: hasKeys
+		},
+		{
+			label: 'Configure LLM provider',
+			desc: 'Choose your AI model and add credentials',
+			href: '/dashboard/settings',
+			done: hasConfig
+		},
+		{
+			label: 'Install the Android app',
+			desc: 'Download and install DroidClaw on your phone',
+			href: 'https://github.com/nicepkg/droidclaw/releases/latest',
+			done: hasDevice
+		},
+		{
+			label: 'Connect your device',
+			desc: 'Pair your phone with the dashboard',
+			href: '/dashboard/devices',
+			done: hasDevice
+		}
+	];
+
+	const completedCount = checklist.filter((s) => s.done).length;
+	const allComplete = completedCount === checklist.length;
 </script>
 
 <h2 class="mb-1 text-xl md:text-2xl font-bold">Dashboard</h2>
@@ -42,6 +81,36 @@
 			<p class="mt-0.5 text-sm text-emerald-700">
 				License: {data.licenseKey ?? 'Active'}
 			</p>
+		</div>
+	</div>
+{/if}
+
+{#if !allComplete}
+	<div class="mb-6">
+		<p class="mb-3 text-sm font-medium text-stone-500">{completedCount} of 4 complete</p>
+		<div class="rounded-2xl bg-white">
+			{#each checklist as step, i}
+				<a
+					href={step.href}
+					class="flex items-center gap-4 p-5 transition-colors hover:bg-stone-50/80
+						{i > 0 ? 'border-t border-stone-100' : ''}
+						{i === 0 ? 'rounded-t-2xl' : ''}
+						{i === checklist.length - 1 ? 'rounded-b-2xl' : ''}"
+				>
+					<div class="flex h-8 w-8 shrink-0 items-center justify-center">
+						{#if step.done}
+							<Icon icon="solar:check-circle-bold" class="h-6 w-6 text-emerald-500" />
+						{:else}
+							<Icon icon="solar:circle-linear" class="h-6 w-6 text-stone-300" />
+						{/if}
+					</div>
+					<div class="flex-1">
+						<h3 class="text-sm font-semibold {step.done ? 'text-stone-400 line-through' : 'text-stone-900'}">{step.label}</h3>
+						<p class="mt-0.5 text-xs text-stone-400">{step.desc}</p>
+					</div>
+					<Icon icon="solar:alt-arrow-right-linear" class="h-5 w-5 text-stone-300" />
+				</a>
+			{/each}
 		</div>
 	</div>
 {/if}
