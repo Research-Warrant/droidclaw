@@ -8,16 +8,6 @@
 
 	let config = $state(await getConfig());
 	const layoutData = page.data;
-
-	$effect(() => {
-		if (updateConfig.result?.saved) {
-			getConfig().then((c) => {
-				if (c) config = c;
-			});
-			toast.success('Settings saved');
-			track(SETTINGS_SAVE);
-		}
-	});
 </script>
 
 <h2 class="mb-6 text-2xl font-bold">Settings</h2>
@@ -56,7 +46,15 @@
 		<h3 class="font-semibold">LLM Provider</h3>
 	</div>
 
-	<form {...updateConfig} class="space-y-4">
+	<form
+		{...updateConfig.enhance(async ({ submit }) => {
+			await submit().updates(getConfig());
+			config = await getConfig();
+			toast.success('Settings saved');
+			track(SETTINGS_SAVE);
+		})}
+		class="space-y-4"
+	>
 		<label class="block">
 			<span class="flex items-center gap-1.5 text-sm text-neutral-600">
 				<Icon icon="ph:plugs-connected-duotone" class="h-4 w-4 text-neutral-400" />
