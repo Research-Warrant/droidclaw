@@ -3,7 +3,13 @@
  *
  * Injected into the agent prompt ONLY when the foreground app matches.
  * Keeps the prompt lean — no hints for apps that aren't on screen.
+ *
+ * Merges static hints with per-user learned hints from the database.
  */
+
+import { db } from "../db.js";
+import { appHint } from "../schema.js";
+import { eq, and, desc } from "drizzle-orm";
 
 const APP_HINTS: Record<string, string[]> = {
   "com.google.android.youtube": [
@@ -60,13 +66,34 @@ export function getAppHints(packageName: string): string[] {
 }
 
 /**
- * Format hints into a prompt section. Returns empty string if no hints.
+ * Format hints into a prompt section. Merges static hints with learned
+ * per-user hints from the database. Returns empty string if no hints.
  */
-export function formatAppHints(packageName: string): string {
-  const hints = getAppHints(packageName);
-  if (hints.length === 0) return "";
+export async function formatAppHints(
+  packageName: string,
+  userId?: string
+): Promise<string> {
+  const staticHints = getAppHints(packageName);
+  let learnedHints: string[] = [];
+
+  if (userId) {
+    try {
+      const rows = await db
+        .select({ hint: appHint.hint })
+        .from(appHint)
+        .where(and(eq(appHint.userId, userId), eq(appHint.packageName, packageName)))
+        .orderBy(desc(appHint.createdAt))
+        .limit(5);
+      learnedHints = rows.map((r) => r.hint);
+    } catch {
+      // Non-critical — continue with static hints only
+    }
+  }
+
+  const all = [...staticHints, ...learnedHints];
+  if (all.length === 0) return "";
   return (
     "\n\nAPP_HINTS (tips specific to this app):\n" +
-    hints.map((h) => `- ${h}`).join("\n")
+    all.map((h) => `- ${h}`).join("\n")
   );
 }

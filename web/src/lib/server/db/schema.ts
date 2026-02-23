@@ -151,5 +151,19 @@ export const agentStep = pgTable('agent_step', {
 	action: jsonb('action'),
 	reasoning: text('reasoning'),
 	result: text('result'),
+	packageName: text('package_name'),
 	timestamp: timestamp('timestamp').defaultNow().notNull()
+});
+
+export const appHint = pgTable('app_hint', {
+	id: text('id').primaryKey(),
+	userId: text('user_id')
+		.notNull()
+		.references(() => user.id, { onDelete: 'cascade' }),
+	packageName: text('package_name').notNull(),
+	hint: text('hint').notNull(),
+	sourceSessionId: text('source_session_id').references(() => agentSession.id, {
+		onDelete: 'set null'
+	}),
+	createdAt: timestamp('created_at').defaultNow().notNull()
 });

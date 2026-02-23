@@ -2,7 +2,7 @@ import * as v from 'valibot';
 import { query, command, getRequestEvent } from '$app/server';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db';
-import { device, agentSession, agentStep } from '$lib/server/db/schema';
+import { device, agentSession, agentStep, appHint } from '$lib/server/db/schema';
 import { eq, desc, and, count, avg, sql, inArray } from 'drizzle-orm';
 
 export const listDevices = query(async () => {
@@ -193,5 +193,34 @@ export const stopGoal = command(
 	v.object({ deviceId: v.string() }),
 	async ({ deviceId }) => {
 		return serverFetch('/goals/stop', { deviceId });
+	}
+);
+
+export const investigateSession = command(
+	v.object({ sessionId: v.string() }),
+	async ({ sessionId }) => {
+		return serverFetch(`/investigate/${sessionId}`, {});
+	}
+);
+
+export const listAppHints = query(v.string(), async (packageName) => {
+	const { locals } = getRequestEvent();
+	if (!locals.user) return [];
+	return db
+		.select()
+		.from(appHint)
+		.where(and(eq(appHint.userId, locals.user.id), eq(appHint.packageName, packageName)))
+		.orderBy(desc(appHint.createdAt));
+});
+
+export const deleteAppHint = command(
+	v.object({ hintId: v.string() }),
+	async ({ hintId }) => {
+		const { locals } = getRequestEvent();
+		if (!locals.user) throw new Error('unauthorized');
+		await db
+			.delete(appHint)
+			.where(and(eq(appHint.id, hintId), eq(appHint.userId, locals.user.id)));
+		return { success: true };
 	}
 );

@@ -440,7 +440,7 @@ export async function runAgentLoop(
       if (useDynamicPrompt) {
         const hasEditableFields = elements.some((e) => e.editable);
         const hasScrollable = elements.some((e) => e.scrollable);
-        const appHintsStr = packageName ? formatAppHints(packageName) : "";
+        const appHintsStr = packageName ? await formatAppHints(packageName, userId) : "";
 
         systemPrompt = buildDynamicPrompt({
           hasEditableFields,
@@ -584,6 +584,7 @@ export async function runAgentLoop(
             screenHash,
             action: action as unknown as Record<string, unknown>,
             reasoning: action.reason ?? "",
+            packageName: packageName ?? null,
           })
           .catch((err) =>
             console.error(`[Agent ${sessionId}] Failed to save step ${step + 1}: ${err}`)
