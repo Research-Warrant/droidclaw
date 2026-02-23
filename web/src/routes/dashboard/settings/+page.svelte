@@ -7,8 +7,82 @@
 	import { track } from '$lib/analytics/track';
 	import { SETTINGS_SAVE, AUTH_SIGNOUT } from '$lib/analytics/events';
 
-	let config = $state(await getConfig());
+	const PROVIDER_MODELS: Record<string, { id: string; label: string; recommended?: boolean }[]> = {
+		openai: [
+			{ id: 'gpt-4.1', label: 'GPT-4.1', recommended: true },
+			{ id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
+			{ id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano' },
+			{ id: 'gpt-4o', label: 'GPT-4o' },
+			{ id: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+			{ id: 'o3', label: 'o3' },
+			{ id: 'o3-mini', label: 'o3 Mini' },
+			{ id: 'o4-mini', label: 'o4 Mini' },
+		],
+		groq: [
+			{ id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', recommended: true },
+			{ id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant' },
+			{ id: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout 17B' },
+			{ id: 'qwen/qwen3-32b', label: 'Qwen3 32B' },
+		],
+		openrouter: [
+			{ id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', recommended: true },
+			{ id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+			{ id: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+			{ id: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
+			{ id: 'anthropic/claude-4.5-sonnet-20250929', label: 'Claude 4.5 Sonnet' },
+			{ id: 'anthropic/claude-4-sonnet-20250522', label: 'Claude 4 Sonnet' },
+			{ id: 'deepseek/deepseek-chat-v3.1', label: 'DeepSeek V3.1' },
+			{ id: 'x-ai/grok-4-fast', label: 'Grok 4 Fast' },
+			{ id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
+			{ id: 'openai/gpt-4.1-mini-2025-04-14', label: 'GPT-4.1 Mini' },
+		],
+		ollama: [],
+		bedrock: [],
+	};
+
+	function getModels(provider: string) {
+		return PROVIDER_MODELS[provider] ?? [];
+	}
+
+	function getDefaultModel(provider: string) {
+		const models = getModels(provider);
+		return models.find((m) => m.recommended)?.id ?? models[0]?.id ?? '';
+	}
+
+	const initialConfig = await getConfig();
+	let config = $state(initialConfig);
 	const layoutData = page.data;
+
+	// Compute initial values from the saved config (non-reactive, one-time)
+	const initProvider = initialConfig?.provider ?? 'openai';
+	const initModel = initialConfig?.model ?? '';
+	const initModels = PROVIDER_MODELS[initProvider] ?? [];
+	const initIsCustom = !!initModel && !initModels.some((m) => m.id === initModel);
+
+	let selectedProvider = $state(initProvider);
+	let customModel = $state(initIsCustom ? initModel : '');
+	let useCustomModel = $state(initIsCustom);
+	let selectedModel = $state(initModel || getDefaultModel(initProvider));
+
+	function handleProviderChange(e: Event) {
+		const provider = (e.target as HTMLSelectElement).value;
+		selectedProvider = provider;
+		useCustomModel = false;
+		customModel = '';
+		selectedModel = getDefaultModel(provider);
+	}
+
+	function handleModelChange(e: Event) {
+		const value = (e.target as HTMLSelectElement).value;
+		if (value === '__custom__') {
+			useCustomModel = true;
+			selectedModel = customModel;
+		} else {
+			useCustomModel = false;
+			customModel = '';
+			selectedModel = value;
+		}
+	}
 </script>
 
 <h2 class="mb-6 text-xl md:text-2xl font-bold">Settings</h2>
@@ -53,6 +127,7 @@
 			<span class="text-sm text-stone-600">Provider</span>
 			<select
 				{...updateConfig.fields.provider.as('text')}
+				onchange={handleProviderChange}
 				class="mt-1 block w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:border-stone-400 focus:outline-none"
 			>
 				<option value="openai">OpenAI</option>
@@ -78,14 +153,38 @@
 			{/each}
 		</label>
 
-		<label class="block">
-			<span class="text-sm text-stone-600">Model (optional)</span>
-			<input
-				{...updateConfig.fields.model.as('text')}
-				placeholder="e.g., gpt-4o, llama-3.3-70b-versatile"
-				class="mt-1 block w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:border-stone-400 focus:outline-none"
-			/>
-		</label>
+		<div class="block">
+			<span class="text-sm text-stone-600">Model</span>
+			{#if getModels(selectedProvider).length > 0}
+				<select
+					onchange={handleModelChange}
+					value={useCustomModel ? '__custom__' : selectedModel}
+					class="mt-1 block w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:border-stone-400 focus:outline-none"
+				>
+					{#each getModels(selectedProvider) as model}
+						<option value={model.id}>
+							{model.label}{model.recommended ? ' (Recommended)' : ''}
+						</option>
+					{/each}
+					<option value="__custom__">Custom model ID...</option>
+				</select>
+				{#if useCustomModel}
+					<input
+						bind:value={customModel}
+						oninput={() => (selectedModel = customModel)}
+						placeholder="Enter model ID"
+						class="mt-2 block w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:border-stone-400 focus:outline-none"
+					/>
+				{/if}
+			{:else}
+				<input
+					bind:value={selectedModel}
+					placeholder="Enter model ID"
+					class="mt-1 block w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:border-stone-400 focus:outline-none"
+				/>
+			{/if}
+			<input type="hidden" name="model" value={selectedModel} />
+		</div>
 
 		<button
 			type="submit"

@@ -360,9 +360,9 @@ const BASE_URLS: Record<string, string> = {
 };
 
 const DEFAULT_MODELS: Record<string, string> = {
-  openai: "gpt-4o",
+  openai: "gpt-4.1",
   groq: "llama-3.3-70b-versatile",
-  openrouter: "google/gemini-2.0-flash-001",
+  openrouter: "google/gemini-2.5-flash",
 };
 
 function getDefaultModel(provider: string): string {
