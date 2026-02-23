@@ -430,6 +430,7 @@ async function composeEmail(
 ): Promise<SkillResult> {
   const emailAddress = action.query;
   const bodyContent = action.text;
+  const subject = action.subject as string | undefined;
 
   if (!emailAddress) {
     return {
@@ -439,44 +440,29 @@ async function composeEmail(
     };
   }
 
-  // 1. Launch mailto: intent
-  console.log(`[Skill] compose_email: Launching mailto:${emailAddress}`);
+  // 1. Build mailto URI with subject and body encoded as query params
+  //    (many email apps ignore intent extras with SENDTO+mailto)
+  const params: string[] = [];
+  if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+  if (bodyContent) params.push(`body=${encodeURIComponent(bodyContent)}`);
+  const mailtoUri = params.length > 0
+    ? `mailto:${emailAddress}?${params.join("&")}`
+    : `mailto:${emailAddress}`;
+
+  console.log(`[Skill] compose_email: Launching ${mailtoUri}`);
   await sessions.sendCommand(deviceId, {
     type: "intent",
     intentAction: "android.intent.action.SENDTO",
-    intentUri: `mailto:${emailAddress}`,
+    intentUri: mailtoUri,
+    intentExtras: {
+      "android.intent.extra.SUBJECT": subject ?? "",
+      "android.intent.extra.TEXT": bodyContent ?? "",
+    },
   });
   await sleep(2500);
 
-  // 2. Find body field and paste content
-  const { elements } = await getScreen(deviceId);
-  const editables = elements
-    .filter((el) => el.editable && el.enabled)
-    .sort((a, b) => a.center[1] - b.center[1]);
-
-  if (editables.length === 0) {
-    return {
-      success: false,
-      message: "Launched email compose but no editable fields appeared",
-    };
-  }
-
-  // Body is typically the last/largest editable field
-  const bodyField = editables[editables.length - 1];
-  const [bx, by] = bodyField.center;
-  console.log(`[Skill] compose_email: Tapping Body field at (${bx}, ${by})`);
-  await tap(deviceId, bx, by);
-  await sleep(300);
-
-  // Set clipboard with body content and paste
-  if (bodyContent) {
-    await clipboardSet(deviceId, bodyContent);
-    await sleep(200);
-  }
-  await sessions.sendCommand(deviceId, { type: "paste" });
-
   return {
     success: true,
-    message: `Email compose opened to ${emailAddress}, body pasted`,
+    message: `Email compose opened to ${emailAddress}${subject ? ` with subject "${subject}"` : ""}${bodyContent ? ", body filled" : ""}. Use submit_message or tap Send to send it.`,
   };
 }

@@ -128,9 +128,8 @@ Multi-Step Actions (PREFER these over basic actions when applicable):
   {"action": "copy_visible_text", "query": "search term", "reason": "Copy matching text to clipboard"}
   {"action": "wait_for_content", "reason": "Wait for new content to appear"}
   {"action": "find_and_tap", "query": "Settings", "reason": "Scroll to find a VISIBLE button/label and tap it"}
-  {"action": "compose_email", "query": "recipient@email.com", "reason": "Fill email To+Body, pastes clipboard into body"}
-  {"action": "compose_email", "query": "recipient@email.com", "text": "body", "reason": "Fill email with specific body"}
-  NOTE: compose_email REQUIRES "query" = recipient email. "text" is optional body (clipboard used if empty).
+  {"action": "compose_email", "query": "recipient@email.com", "subject": "Hello", "text": "body text", "reason": "Open email compose with all fields filled"}
+  NOTE: compose_email REQUIRES "query" = recipient email. "subject" and "text" are optional. After compose_email, use "submit_message" to tap the Send button.
   NOTE: find_and_tap is ONLY for tapping elements that ALREADY EXIST on screen (buttons, menu items, labels). It scrolls to find them. To INPUT text into a search bar or text field, use "type" action instead — NEVER use find_and_tap for typing.
 
 ═══════════════════════════════════════════
@@ -174,7 +173,7 @@ CRITICAL RULES
 17. COORDINATES: ALWAYS use coordinates from SCREEN_CONTEXT elements (the "center" field). NEVER estimate or guess coordinates from screenshots -- they are inaccurate. Screenshots help you understand the layout; SCREEN_CONTEXT provides the correct tap targets.
 18. BACK IS DESTRUCTIVE: NEVER use "back" to leave an app while you have a task in progress within it. You will LOSE all progress (typed text, loading responses, navigation state). Try all other in-app approaches first. Only use "back" after 5+ failed attempts within the app.
 19. LEARN FROM HISTORY: Before choosing an action, check your earlier turns. If "enter" failed to submit a query before, do NOT try "enter" again -- find and tap the Send button. If specific coordinates didn't work, try different ones. Never repeat a strategy that already failed in this session.
-20. EMAIL COMPOSE: ALWAYS use "compose_email" action when filling email fields. It fills To, Subject, and Body in the correct order. Pass the recipient email in "query" and body text in "text" (or it pastes from clipboard). NEVER manually type/paste into email fields -- you WILL put it in the wrong field.
+20. EMAIL COMPOSE: ALWAYS use "compose_email" action when sending emails. Pass recipient in "query", subject in "subject", body in "text". After compose_email opens the email app, ALWAYS follow up with "submit_message" to tap the Send button. Do NOT mark as "done" until Send is tapped. NEVER manually type/paste into email fields.
 21. INTENTS: ALWAYS prefer "intent" over UI navigation when the goal maps to a known intent pattern. Intents skip the UI entirely — no screen parsing, no stuck loops, no wasted steps. Use intents for: messaging (WhatsApp wa.me, SMS, email, calls), payments (UPI, PhonePe), navigation (Google Maps), productivity (alarms, timers, calendar events), media (Spotify, YouTube), and social (Instagram, Twitter/X profiles). Each intent replaces 5-10 UI navigation steps with a single action.
 
 ═══════════════════════════════════════════
