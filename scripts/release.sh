@@ -10,6 +10,9 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
+# Fetch remote tags so git log range works
+git fetch --tags --quiet
+
 # Get last release tag
 LAST_TAG=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
 if [ -z "$LAST_TAG" ]; then
