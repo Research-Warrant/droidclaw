@@ -29,61 +29,11 @@ setInterval(() => {
   }
 }, 5 * 60_000);
 
-// ── Authenticated routes (create + status) ──
-const authed = new Hono<AuthEnv>();
-authed.use("*", sessionMiddleware);
+// ── Single router with per-route auth ──
+const pairing = new Hono<AuthEnv>();
 
-/** POST /pairing/create — generate a 6-digit pairing code */
-authed.post("/create", async (c) => {
-  const user = c.get("user");
-
-  // Delete any existing code for this user (one active code at a time)
-  await db.delete(pairingCode).where(eq(pairingCode.userId, user.id));
-
-  // Generate random 6-digit code
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  const expiresAt = new Date(Date.now() + 5 * 60_000); // 5 minutes
-  const id = crypto.randomUUID();
-
-  await db.insert(pairingCode).values({
-    id,
-    code,
-    userId: user.id,
-    expiresAt,
-  });
-
-  return c.json({ code, expiresAt: expiresAt.toISOString() });
-});
-
-/** GET /pairing/status — check if user's code was claimed */
-authed.get("/status", async (c) => {
-  const user = c.get("user");
-  const now = new Date();
-
-  const rows = await db
-    .select()
-    .from(pairingCode)
-    .where(eq(pairingCode.userId, user.id))
-    .limit(1);
-
-  if (rows.length === 0) {
-    // No code exists — it was claimed and deleted
-    return c.json({ paired: true });
-  }
-
-  const row = rows[0];
-  if (row.expiresAt < now) {
-    return c.json({ paired: false, expired: true });
-  }
-
-  return c.json({ paired: false, expired: false });
-});
-
-// ── Public route (claim, no auth) ──
-const pub = new Hono();
-
-/** POST /pairing/claim — phone sends code to get API key + WS URL */
-pub.post("/claim", async (c) => {
+/** POST /pairing/claim — phone sends code to get API key + WS URL (PUBLIC, no auth) */
+pairing.post("/claim", async (c) => {
   // Rate limit by IP
   const ip = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "unknown";
   if (isRateLimited(ip)) {
@@ -129,9 +79,50 @@ pub.post("/claim", async (c) => {
   return c.json({ apiKey: result.key, wsUrl });
 });
 
-// ── Combined router ──
-const pairing = new Hono();
-pairing.route("/", authed);
-pairing.route("/", pub);
+/** POST /pairing/create — generate a 6-digit pairing code (authed) */
+pairing.post("/create", sessionMiddleware, async (c) => {
+  const user = c.get("user");
+
+  // Delete any existing code for this user (one active code at a time)
+  await db.delete(pairingCode).where(eq(pairingCode.userId, user.id));
+
+  // Generate random 6-digit code
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 5 * 60_000); // 5 minutes
+  const id = crypto.randomUUID();
+
+  await db.insert(pairingCode).values({
+    id,
+    code,
+    userId: user.id,
+    expiresAt,
+  });
+
+  return c.json({ code, expiresAt: expiresAt.toISOString() });
+});
+
+/** GET /pairing/status — check if user's code was claimed (authed) */
+pairing.get("/status", sessionMiddleware, async (c) => {
+  const user = c.get("user");
+  const now = new Date();
+
+  const rows = await db
+    .select()
+    .from(pairingCode)
+    .where(eq(pairingCode.userId, user.id))
+    .limit(1);
+
+  if (rows.length === 0) {
+    // No code exists — it was claimed and deleted
+    return c.json({ paired: true });
+  }
+
+  const row = rows[0];
+  if (row.expiresAt < now) {
+    return c.json({ paired: false, expired: true });
+  }
+
+  return c.json({ paired: false, expired: false });
+});
 
 export { pairing };
