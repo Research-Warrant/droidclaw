@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { listDevices } from '$lib/api/devices.remote';
+	import { getConfig } from '$lib/api/settings.remote';
 	import { createPairingCode, getPairingStatus } from '$lib/api/pairing.remote';
 	import { dashboardWs } from '$lib/stores/dashboard-ws.svelte';
 	import { onMount } from 'svelte';
@@ -22,7 +23,8 @@
 		lastGoal: { goal: string; status: string; startedAt: string } | null;
 	}
 
-	const initialDevices = await listDevices();
+	const [initialDevices, llmConfig] = await Promise.all([listDevices(), getConfig()]);
+	const hasLlmConfig = llmConfig !== null;
 
 	let devices = $state<DeviceEntry[]>(
 		initialDevices.map((d) => ({
@@ -214,6 +216,23 @@
 		Pair Device
 	</button>
 </div>
+
+<!-- LLM not configured banner -->
+{#if !hasLlmConfig && devices.length > 0}
+	<a
+		href="/dashboard/settings"
+		class="mb-6 flex items-center gap-3 rounded-2xl bg-amber-50 p-4 transition-colors hover:bg-amber-100/80"
+	>
+		<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100">
+			<Icon icon="solar:danger-triangle-bold-duotone" class="h-5 w-5 text-amber-600" />
+		</div>
+		<div class="flex-1">
+			<p class="text-sm font-semibold text-amber-900">Set up your LLM provider</p>
+			<p class="mt-0.5 text-xs text-amber-700">Your device is paired but needs an AI model configured to run tasks.</p>
+		</div>
+		<Icon icon="solar:alt-arrow-right-linear" class="h-5 w-5 text-amber-400" />
+	</a>
+{/if}
 
 {#if devices.length === 0}
 	<div class="rounded-2xl bg-white p-6 md:p-10 text-center">
