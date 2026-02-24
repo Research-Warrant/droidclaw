@@ -96,6 +96,9 @@ export const DEVICE_DUMP_PATH = "/sdcard/window_dump.xml";
 export const LOCAL_DUMP_PATH = "window_dump.xml";
 export const DEVICE_SCREENSHOT_PATH = "/sdcard/kernel_screenshot.png";
 export const LOCAL_SCREENSHOT_PATH = "kernel_screenshot.png";
+export const DEVICE_A11Y_SNAPSHOT_PATH =
+  "/sdcard/Android/data/com.thisux.droidclaw/files/ui_snapshot.json";
+export const LOCAL_A11Y_SNAPSHOT_PATH = "ui_snapshot.json";
 
 // ===========================================
 // Agent Defaults

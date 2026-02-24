@@ -9,6 +9,8 @@
  *   wait_for_content — Wait for new content to appear (AI responses, page loads)
  *   find_and_tap — Find an element by text label and tap it
  *   compose_email — Fill email fields in correct order (To, Subject, Body)
+ *   like_nth_comment — Deterministically tap the heart icon for the Nth visible comment row
+ *   verify_nth_comment_like — Deterministically verify like state for the Nth visible comment row
  */
 
 import { existsSync, readFileSync } from "fs";
@@ -40,6 +42,10 @@ export function executeSkill(
       return findAndTap(decision, elements);
     case "compose_email":
       return composeEmail(decision, elements);
+    case "like_nth_comment":
+      return likeNthComment(decision, elements);
+    case "verify_nth_comment_like":
+      return verifyNthCommentLike(decision, elements);
     default:
       return { success: false, message: `Unknown skill: ${skill}` };
   }
@@ -499,5 +505,156 @@ function composeEmail(
   return {
     success: true,
     message: `Email compose opened to ${emailAddress}, body pasted`,
+  };
+}
+
+// ===========================================
+// Skill 6: like_nth_comment / verify_nth_comment_like
+// ===========================================
+
+let lastCommentLikeAttempt:
+  | { index: number; y: number; x: number; countBefore: number | null }
+  | null = null;
+
+function parseNthCommentIndex(decision: ActionDecision): number {
+  const raw = decision.query ?? decision.text ?? "";
+  const match = String(raw).match(/\d+/);
+  const n = match ? Number.parseInt(match[0], 10) : Number.NaN;
+  return Number.isFinite(n) && n > 0 ? n : 3;
+}
+
+function parseFirstInt(text: string): number | null {
+  const match = text.match(/\b\d[\d,]*\b/);
+  if (!match) return null;
+  return Number.parseInt(match[0].replaceAll(",", ""), 10);
+}
+
+function getScreenApprox(elements: UIElement[]): { width: number; height: number } {
+  let maxX = 1080;
+  let maxY = 2400;
+  for (const el of elements) {
+    const [x, y] = el.center;
+    const [w, h] = el.size;
+    maxX = Math.max(maxX, x + Math.max(0, Math.floor(w / 2)));
+    maxY = Math.max(maxY, y + Math.max(0, Math.floor(h / 2)));
+  }
+  return { width: maxX, height: maxY };
+}
+
+function isCommentLikeButton(el: UIElement, screenWidth: number): boolean {
+  const hay = `${el.text} ${el.id} ${el.hint}`.toLowerCase();
+  const isLike = hay.includes("like");
+  if (!isLike) return false;
+  if (hay.includes("video like") || hay.includes("like video") || hay.includes("repost")) return false;
+  if (el.center[0] < screenWidth * 0.72) return false;
+  if (el.center[1] < 900) return false; // avoid top/header/main video controls
+  if (el.center[1] > 2300) return false; // avoid bottom composer bar
+  return el.clickable || el.action === "tap" || /like or undo like/i.test(el.text);
+}
+
+function collectCommentLikeRows(elements: UIElement[]): UIElement[] {
+  const { width } = getScreenApprox(elements);
+  const candidates = elements
+    .filter((el) => isCommentLikeButton(el, width))
+    .sort((a, b) => a.center[1] - b.center[1] || b.center[0] - a.center[0]);
+
+  // Deduplicate near-identical rows; keep the rightmost candidate in each row bucket.
+  const rows: UIElement[] = [];
+  for (const el of candidates) {
+    const existingIdx = rows.findIndex((r) => Math.abs(r.center[1] - el.center[1]) <= 24);
+    if (existingIdx === -1) {
+      rows.push(el);
+      continue;
+    }
+    if (el.center[0] > rows[existingIdx].center[0]) {
+      rows[existingIdx] = el;
+    }
+  }
+
+  return rows.sort((a, b) => a.center[1] - b.center[1]);
+}
+
+function findNearbyCommentCount(elements: UIElement[], target: UIElement): number | null {
+  const nearby = elements.filter((el) => {
+    if (!el.text) return false;
+    if (Math.abs(el.center[1] - target.center[1]) > 70) return false;
+    if (el.center[0] < target.center[0] - 180) return false;
+    if (el.center[0] > target.center[0] + 40) return false;
+    return true;
+  });
+
+  for (const el of nearby) {
+    const n = parseFirstInt(el.text);
+    if (n != null) return n;
+  }
+  return null;
+}
+
+function likeNthComment(decision: ActionDecision, elements: UIElement[]): ActionResult {
+  const index = parseNthCommentIndex(decision);
+  const rows = collectCommentLikeRows(elements);
+  if (rows.length < index) {
+    return {
+      success: false,
+      message: `Only found ${rows.length} visible comment-like buttons; need ${index}`,
+    };
+  }
+
+  const target = rows[index - 1];
+  const [x, y] = target.center;
+  const countBefore = findNearbyCommentCount(elements, target);
+  console.log(`like_nth_comment: Tapping comment #${index} heart at (${x}, ${y})`);
+  runAdbCommand(["shell", "input", "tap", String(x), String(y)]);
+  lastCommentLikeAttempt = { index, x, y, countBefore };
+
+  return {
+    success: true,
+    message: `Tapped heart for visible comment #${index} at (${x}, ${y})`,
+    data: JSON.stringify({ x, y, countBefore }),
+  };
+}
+
+function verifyNthCommentLike(decision: ActionDecision, elements: UIElement[]): ActionResult {
+  const index = parseNthCommentIndex(decision);
+  const rows = collectCommentLikeRows(elements);
+  if (rows.length < index) {
+    return {
+      success: false,
+      message: `Could not verify: only found ${rows.length} visible comment-like buttons; need ${index}`,
+    };
+  }
+
+  let target = rows[index - 1];
+  if (lastCommentLikeAttempt && lastCommentLikeAttempt.index === index) {
+    const nearest = rows
+      .map((row) => ({ row, dy: Math.abs(row.center[1] - lastCommentLikeAttempt!.y) }))
+      .sort((a, b) => a.dy - b.dy)[0];
+    if (nearest && nearest.dy <= 80) target = nearest.row;
+  }
+
+  const hay = `${target.text} ${target.id} ${target.hint}`.toLowerCase();
+  const countNow = findNearbyCommentCount(elements, target);
+  const selectedLike =
+    target.selected || target.checked || hay.includes("undo like") || hay.includes("liked");
+
+  const countChanged =
+    lastCommentLikeAttempt &&
+    lastCommentLikeAttempt.index === index &&
+    lastCommentLikeAttempt.countBefore != null &&
+    countNow != null &&
+    countNow !== lastCommentLikeAttempt.countBefore;
+
+  if (selectedLike || countChanged) {
+    return {
+      success: true,
+      message: `Comment #${index} like verified (${selectedLike ? "selected" : "count changed"})`,
+      data: JSON.stringify({ selectedLike, countNow }),
+    };
+  }
+
+  return {
+    success: false,
+    message: `Comment #${index} like not confirmed yet`,
+    data: JSON.stringify({ selectedLike, countNow }),
   };
 }

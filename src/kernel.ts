@@ -48,11 +48,14 @@ import {
 } from "./llm-providers.js";
 import {
   getInteractiveElements,
+  getInteractiveElementsFromSnapshot,
   computeScreenHash,
   filterElements,
   type UIElement,
 } from "./sanitizer.js";
 import {
+  DEVICE_A11Y_SNAPSHOT_PATH,
+  LOCAL_A11Y_SNAPSHOT_PATH,
   DEVICE_SCREENSHOT_PATH,
   LOCAL_SCREENSHOT_PATH,
 } from "./constants.js";
@@ -67,10 +70,86 @@ interface ScreenState {
   compactJson: string;
 }
 
+let lastA11yScreenState: ScreenState | null = null;
+
+function tryGetAccessibilitySnapshotState(): ScreenState | null {
+  try {
+    // `test -f` can return false negatives on some Android/FUSE storage paths.
+    // Pull directly and validate locally instead.
+    runAdbCommand(["pull", DEVICE_A11Y_SNAPSHOT_PATH, LOCAL_A11Y_SNAPSHOT_PATH], 0);
+    if (!existsSync(LOCAL_A11Y_SNAPSHOT_PATH)) {
+      console.log("A11Y snapshot: adb pull did not produce local file; falling back");
+      return null;
+    }
+
+    const snapshot = readFileSync(LOCAL_A11Y_SNAPSHOT_PATH, "utf-8");
+    const parsed = getInteractiveElementsFromSnapshot(snapshot);
+    if (!parsed) {
+      console.log("A11Y snapshot: invalid JSON payload; falling back");
+      return null;
+    }
+
+    const ageMs =
+      typeof parsed.timestampMs === "number" ? Date.now() - parsed.timestampMs : Infinity;
+    if (ageMs > Config.A11Y_SNAPSHOT_MAX_AGE_MS) {
+      console.log(
+        `A11Y snapshot: stale (${ageMs}ms old > ${Config.A11Y_SNAPSHOT_MAX_AGE_MS}ms); falling back`
+      );
+      return null;
+    }
+
+    if (parsed.packageName) {
+      const foreground = getForegroundApp();
+      const foregroundPackage = foreground?.split("/")[0] ?? "";
+      if (foregroundPackage && foregroundPackage !== parsed.packageName) {
+        console.log(
+          `A11Y snapshot: package mismatch (snapshot=${parsed.packageName}, foreground=${foregroundPackage}); falling back`
+        );
+        return null;
+      }
+    }
+
+    const compact = filterElements(parsed.elements, Config.MAX_ELEMENTS);
+    console.log(
+      `A11Y snapshot: using ${parsed.elements.length} elements (${Math.max(0, ageMs)}ms old)` +
+        (parsed.packageName ? ` from ${parsed.packageName}` : "")
+    );
+    const state = { elements: parsed.elements, compactJson: JSON.stringify(compact) };
+    lastA11yScreenState = state;
+    return state;
+  } catch {
+    console.log("A11Y snapshot: read failed; falling back to uiautomator dump");
+    return null;
+  }
+}
+
 /**
  * Dumps the current UI XML and returns parsed elements + compact filtered JSON for the LLM.
  */
 function getScreenState(): ScreenState {
+  let a11yState = tryGetAccessibilitySnapshotState();
+  if (a11yState) return a11yState;
+
+  if (Config.A11Y_ONLY) {
+    for (let i = 0; i < Config.A11Y_SNAPSHOT_RETRY_COUNT; i++) {
+      const retryNo = i + 1;
+      console.log(
+        `A11Y_ONLY: retrying snapshot (${retryNo}/${Config.A11Y_SNAPSHOT_RETRY_COUNT}) in ${Config.A11Y_SNAPSHOT_RETRY_DELAY_MS}ms`
+      );
+      Bun.sleepSync(Config.A11Y_SNAPSHOT_RETRY_DELAY_MS);
+      a11yState = tryGetAccessibilitySnapshotState();
+      if (a11yState) return a11yState;
+    }
+
+    if (lastA11yScreenState) {
+      console.log("A11Y_ONLY: using last valid Accessibility snapshot (stale fallback)");
+      return lastA11yScreenState;
+    }
+
+    console.log("A11Y_ONLY: no valid Accessibility snapshot available; skipping uiautomator dump");
+    return { elements: [], compactJson: "Error: No Accessibility snapshot available." };
+  }
+
   try {
     runAdbCommand(["shell", "uiautomator", "dump", Config.SCREEN_DUMP_PATH]);
     runAdbCommand(["pull", Config.SCREEN_DUMP_PATH, Config.LOCAL_DUMP_PATH]);
@@ -400,7 +479,16 @@ export async function runAgent(goal: string, maxSteps?: number): Promise<{ succe
     });
 
     // 6. Action: Execute the decision (multi-step actions or basic actions)
-    const MULTI_STEP_ACTIONS = ["read_screen", "submit_message", "copy_visible_text", "wait_for_content", "find_and_tap", "compose_email"];
+    const MULTI_STEP_ACTIONS = [
+      "read_screen",
+      "submit_message",
+      "copy_visible_text",
+      "wait_for_content",
+      "find_and_tap",
+      "compose_email",
+      "like_nth_comment",
+      "verify_nth_comment_like",
+    ];
     const actionStart = performance.now();
     let result: ActionResult;
     try {

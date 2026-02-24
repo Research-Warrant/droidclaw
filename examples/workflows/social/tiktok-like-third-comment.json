@@ -7,12 +7,16 @@
       "maxSteps": 8
     },
     {
-      "goal": "Tap the comments button (speech bubble) for the current video. Stop only when the comments panel/list is visible. Do not scroll the main feed.",
+      "goal": "Tap the comments button (speech bubble) for the current video using the button on the right-side action rail. Stop only when the comments panel/list is visible. Do not scroll the main feed. If coordinates are invalid, wait and re-read screen instead of guessing.",
       "maxSteps": 10
     },
     {
-      "goal": "Keep the comments panel open. Find the third visible real user comment (ignore 'Add comment', filters, pinned headers, and ads). Tap the heart/like for that third comment only, then return done immediately.",
+      "goal": "Keep the comments panel open. Use the deterministic action like_nth_comment with query='3'. This taps the small heart icon on the 3rd visible comment row. Do NOT use find_and_tap. Do NOT tap usernames/comment text. Do NOT tap the video's main like button. Do NOT return done until after executing like_nth_comment.",
       "maxSteps": 12
+    },
+    {
+      "goal": "Passive verification only. Use verify_nth_comment_like with query='3' to check the 3rd visible comment row. Do NOT use find_and_tap. Do NOT tap, scroll, or navigate. If verify_nth_comment_like succeeds, return done. If it fails, return wait without interacting.",
+      "maxSteps": 10
     }
   ]
 }

@@ -102,7 +102,10 @@ Multi-Step Actions (PREFER these over basic actions when applicable):
   {"action": "find_and_tap", "query": "Button Label", "reason": "Find element by text and tap it"}
   {"action": "compose_email", "query": "recipient@email.com", "reason": "Fill email To+Body, pastes clipboard into body"}
   {"action": "compose_email", "query": "recipient@email.com", "text": "body", "reason": "Fill email with specific body"}
+  {"action": "like_nth_comment", "query": "3", "reason": "Tap heart icon for the 3rd visible comment row"}
+  {"action": "verify_nth_comment_like", "query": "3", "reason": "Verify like state for the 3rd visible comment row"}
   NOTE: compose_email REQUIRES "query" = recipient email. "text" is optional body (clipboard used if empty).
+  NOTE: like_nth_comment / verify_nth_comment_like use "query" = visible comment index (e.g., "3").
 
 ═══════════════════════════════════════════
 ELEMENT PROPERTIES YOU WILL SEE
@@ -453,7 +456,7 @@ const actionDecisionSchema = z.object({
   think: z.string().optional().describe("Your reasoning about the current screen state and what to do next"),
   plan: z.array(z.string()).optional().describe("3-5 high-level steps to achieve the goal"),
   planProgress: z.string().optional().describe("Which plan step you are currently on"),
-  action: z.string().describe("The action to take: tap, type, scroll, enter, back, home, wait, done, longpress, launch, clear, clipboard_get, clipboard_set, paste, shell, open_url, switch_app, notifications, pull_file, push_file, keyevent, open_settings, read_screen, submit_message, copy_visible_text, wait_for_content, find_and_tap, compose_email"),
+  action: z.string().describe("The action to take: tap, type, scroll, enter, back, home, wait, done, longpress, launch, clear, clipboard_get, clipboard_set, paste, shell, open_url, switch_app, notifications, pull_file, push_file, keyevent, open_settings, read_screen, submit_message, copy_visible_text, wait_for_content, find_and_tap, compose_email, like_nth_comment, verify_nth_comment_like"),
   coordinates: z.tuple([z.number(), z.number()]).optional().describe("Target field as [x, y] — used by tap, longpress, type, and paste"),
   text: z.string().optional().describe("Text to type, clipboard text, or email body for compose_email"),
   direction: z.string().optional().describe("Scroll direction: up, down, left, right"),
@@ -464,7 +467,7 @@ const actionDecisionSchema = z.object({
   extras: z.record(z.string(), z.string()).optional().describe("Intent extras for launch action"),
   command: z.string().optional().describe("Shell command to run"),
   filename: z.string().optional().describe("Screenshot filename"),
-  query: z.string().optional().describe("Email address for compose_email (REQUIRED), search term for find_and_tap (REQUIRED), or filter for copy_visible_text"),
+  query: z.string().optional().describe("Email address for compose_email (REQUIRED), search term for find_and_tap (REQUIRED), filter for copy_visible_text, or visible comment index for like_nth_comment / verify_nth_comment_like (e.g. '3')"),
   url: z.string().optional().describe("URL to open for open_url action"),
   path: z.string().optional().describe("Device file path for pull_file action"),
   source: z.string().optional().describe("Local file path for push_file action"),

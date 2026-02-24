@@ -56,6 +56,12 @@ export const Config = {
 
   // Streaming responses
   STREAMING_ENABLED: env("STREAMING_ENABLED", String(DEFAULT_STREAMING_ENABLED)) === "true",
+  // Accessibility snapshot freshness window (ms) before falling back to uiautomator dump
+  A11Y_SNAPSHOT_MAX_AGE_MS: parseInt(env("A11Y_SNAPSHOT_MAX_AGE_MS", "10000"), 10),
+  // Prefer AccessibilityService snapshots only (avoid uiautomator dump, which can restart the service)
+  A11Y_ONLY: env("A11Y_ONLY", "false") === "true",
+  A11Y_SNAPSHOT_RETRY_COUNT: parseInt(env("A11Y_SNAPSHOT_RETRY_COUNT", "2"), 10),
+  A11Y_SNAPSHOT_RETRY_DELAY_MS: parseInt(env("A11Y_SNAPSHOT_RETRY_DELAY_MS", "300"), 10),
 
   // LLM Provider: "groq", "openai", "bedrock", "openrouter", "ollama", or "triton"
   LLM_PROVIDER: env("LLM_PROVIDER", "groq"),

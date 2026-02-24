@@ -28,6 +28,26 @@ export interface UIElement {
   depth: number;
 }
 
+function isPlausibleElement(el: UIElement): boolean {
+  const [x, y] = el.center;
+  const [w, h] = el.size;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  if (!Number.isFinite(w) || !Number.isFinite(h)) return false;
+  if (w <= 0 || h <= 0) return false;
+  // Ignore off-screen/invalid nodes (common in TikTok overlays and recycled views)
+  if (x < 0 || y < 0) return false;
+  if (x > 10000 || y > 10000) return false;
+  return true;
+}
+
+interface AccessibilitySnapshot {
+  version?: number;
+  timestampMs?: number;
+  packageName?: string;
+  screenHash?: string;
+  elements?: Array<Partial<UIElement> & { center?: number[]; size?: number[] }>;
+}
+
 /**
  * Compute a hash of element texts/ids for screen state comparison.
  */
@@ -167,7 +187,69 @@ export function getInteractiveElements(xmlContent: string): UIElement[] {
   }
 
   walk(parsed, "root", 0);
-  return elements;
+  return elements.filter(isPlausibleElement);
+}
+
+/**
+ * Parses a JSON snapshot emitted by the Android AccessibilityService.
+ * Returns null when the payload is invalid so callers can fall back to XML dump.
+ */
+export function getInteractiveElementsFromSnapshot(
+  snapshotContent: string
+): { elements: UIElement[]; timestampMs?: number; packageName?: string } | null {
+  let parsed: AccessibilitySnapshot;
+  try {
+    parsed = JSON.parse(snapshotContent);
+  } catch {
+    return null;
+  }
+
+  if (!Array.isArray(parsed.elements)) return null;
+
+  const elements: UIElement[] = [];
+  for (const raw of parsed.elements) {
+    if (!raw || typeof raw !== "object") continue;
+    const center = Array.isArray(raw.center) ? raw.center : [0, 0];
+    const size = Array.isArray(raw.size) ? raw.size : [0, 0];
+    if (center.length < 2 || size.length < 2) continue;
+
+    const action = raw.action;
+    const normalizedAction: UIElement["action"] =
+      action === "tap" || action === "type" || action === "longpress" || action === "scroll"
+        ? action
+        : "read";
+
+    const element: UIElement = {
+      id: typeof raw.id === "string" ? raw.id : "",
+      text: typeof raw.text === "string" ? raw.text : "",
+      type: typeof raw.type === "string" ? raw.type : "",
+      bounds: typeof raw.bounds === "string" ? raw.bounds : "",
+      center: [Number(center[0]) || 0, Number(center[1]) || 0],
+      size: [Number(size[0]) || 0, Number(size[1]) || 0],
+      clickable: raw.clickable === true,
+      editable: raw.editable === true,
+      enabled: raw.enabled !== false,
+      checked: raw.checked === true,
+      focused: raw.focused === true,
+      selected: raw.selected === true,
+      scrollable: raw.scrollable === true,
+      longClickable: raw.longClickable === true,
+      password: raw.password === true,
+      hint: typeof raw.hint === "string" ? raw.hint : "",
+      action: normalizedAction,
+      parent: typeof raw.parent === "string" ? raw.parent : "",
+      depth: typeof raw.depth === "number" ? raw.depth : 0,
+    };
+    if (isPlausibleElement(element)) {
+      elements.push(element);
+    }
+  }
+
+  return {
+    elements,
+    timestampMs: parsed.timestampMs,
+    packageName: parsed.packageName,
+  };
 }
 
 // ===========================================
@@ -182,6 +264,8 @@ export interface CompactUIElement {
   text: string;
   center: [number, number];
   action: UIElement["action"];
+  type?: string;
+  parent?: string;
   // Only included when non-default
   enabled?: false;
   checked?: true;
@@ -200,6 +284,8 @@ export function compactElement(el: UIElement): CompactUIElement {
     center: el.center,
     action: el.action,
   };
+  if (el.type) compact.type = el.type;
+  if (el.parent) compact.parent = el.parent;
   if (!el.enabled) compact.enabled = false;
   if (el.checked) compact.checked = true;
   if (el.focused) compact.focused = true;
