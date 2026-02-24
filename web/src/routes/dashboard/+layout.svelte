@@ -29,8 +29,8 @@
 	});
 </script>
 
-<div class="flex min-h-screen">
-	<aside class="hidden md:flex w-64 flex-col bg-stone-100 p-6">
+<div class="flex h-screen overflow-hidden">
+	<aside class="hidden md:flex w-64 flex-col bg-stone-100 p-6 overflow-y-auto">
 		<div class="mb-8">
 			<h1 class="text-lg font-bold tracking-tight">DroidClaw<span class="text-stone-400">.ai</span></h1>
 		</div>
