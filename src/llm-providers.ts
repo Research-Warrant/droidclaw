@@ -8,11 +8,6 @@
  */
 
 import OpenAI from "openai";
-import {
-  BedrockRuntimeClient,
-  InvokeModelCommand,
-  InvokeModelWithResponseStreamCommand,
-} from "@aws-sdk/client-bedrock-runtime";
 import { generateText, streamText, generateObject, streamObject } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
@@ -341,6 +336,115 @@ class OpenAIProvider implements LLMProvider {
 }
 
 // ===========================================
+// Triton/vLLM Provider (custom /v2/models/:model/generate API)
+// ===========================================
+
+class TritonProvider implements LLMProvider {
+  private model: string;
+  readonly capabilities = { supportsImages: false, supportsStreaming: false };
+
+  constructor() {
+    this.model = Config.TRITON_MODEL;
+  }
+
+  private flattenContent(content: ChatMessage["content"]): string {
+    if (typeof content === "string") return content;
+    return content
+      .map((part) =>
+        part.type === "text" ? part.text : "[Screenshot attached: image omitted for Triton provider]"
+      )
+      .join("\n");
+  }
+
+  private buildQwenPrompt(messages: ChatMessage[]): string {
+    const chunks = messages.map((msg) => {
+      const text = this.flattenContent(msg.content);
+      return `<|im_start|>${msg.role}\n${text}\n<|im_end|>`;
+    });
+    chunks.push("<|im_start|>assistant\n");
+    return chunks.join("\n");
+  }
+
+  private getEndpointUrl(): string {
+    const base = Config.TRITON_BASE_URL.replace(/\/+$/, "");
+    return `${base}/v2/models/${encodeURIComponent(this.model)}/generate`;
+  }
+
+  private buildHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (Config.TRITON_API_KEY) {
+      headers.Authorization = `Bearer ${Config.TRITON_API_KEY}`;
+    }
+    return headers;
+  }
+
+  private extractGeneratedText(rawOutput: string, prompt: string): string {
+    let text = rawOutput;
+
+    // Some Triton/vLLM deployments echo the full prompt in text_output.
+    if (text.startsWith(prompt)) {
+      text = text.slice(prompt.length);
+    }
+
+    const assistantPrefix = "<|im_start|>assistant\n";
+    const assistantIdx = text.lastIndexOf(assistantPrefix);
+    if (assistantIdx !== -1) {
+      text = text.slice(assistantIdx + assistantPrefix.length);
+    }
+
+    const endTagIdx = text.indexOf("\n<|im_end|>");
+    if (endTagIdx !== -1) {
+      text = text.slice(0, endTagIdx);
+    }
+
+    return text.trim();
+  }
+
+  async getDecision(messages: ChatMessage[]): Promise<ActionDecision> {
+    const prompt = this.buildQwenPrompt(messages);
+    const body = {
+      text_input: prompt,
+      parameters: {
+        max_tokens: Config.TRITON_MAX_TOKENS,
+        temperature: Config.TRITON_TEMPERATURE,
+        top_p: Config.TRITON_TOP_P,
+      },
+    };
+
+    const requestInit: RequestInit & {
+      tls?: { rejectUnauthorized?: boolean };
+    } = {
+      method: "POST",
+      headers: this.buildHeaders(),
+      body: JSON.stringify(body),
+    };
+
+    if (Config.TRITON_INSECURE_TLS) {
+      requestInit.tls = { rejectUnauthorized: false };
+    }
+
+    const response = await fetch(this.getEndpointUrl(), requestInit);
+    const rawText = await response.text();
+    if (!response.ok) {
+      throw new Error(`Triton request failed (${response.status}): ${rawText.slice(0, 400)}`);
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      throw new Error(`Triton returned non-JSON response: ${rawText.slice(0, 400)}`);
+    }
+
+    const output = typeof parsed?.text_output === "string" ? parsed.text_output : "";
+    const resultText = this.extractGeneratedText(output, prompt);
+    return parseJsonResponse(resultText || output);
+  }
+}
+
+// ===========================================
 // OpenRouter Provider (Vercel AI SDK)
 // ===========================================
 
@@ -446,18 +550,28 @@ class OpenRouterProvider implements LLMProvider {
 // ===========================================
 
 class BedrockProvider implements LLMProvider {
-  private client: BedrockRuntimeClient;
+  private client: any | null = null;
   private model: string;
   readonly capabilities: { supportsImages: boolean; supportsStreaming: boolean };
 
   constructor() {
-    this.client = new BedrockRuntimeClient({ region: Config.AWS_REGION });
     this.model = Config.BEDROCK_MODEL;
     // Only Anthropic models on Bedrock support images
     this.capabilities = {
       supportsImages: this.isAnthropicModel(),
       supportsStreaming: true,
     };
+  }
+
+  private async getBedrockSdk() {
+    return import("@aws-sdk/client-bedrock-runtime");
+  }
+
+  private async getClient() {
+    if (this.client) return this.client;
+    const { BedrockRuntimeClient } = await this.getBedrockSdk();
+    this.client = new BedrockRuntimeClient({ region: Config.AWS_REGION });
+    return this.client;
   }
 
   private isAnthropicModel(): boolean {
@@ -555,6 +669,8 @@ class BedrockProvider implements LLMProvider {
   }
 
   async getDecision(messages: ChatMessage[]): Promise<ActionDecision> {
+    const client = await this.getClient();
+    const { InvokeModelCommand } = await this.getBedrockSdk();
     const requestBody = this.buildRequest(messages);
     const command = new InvokeModelCommand({
       modelId: this.model,
@@ -563,7 +679,7 @@ class BedrockProvider implements LLMProvider {
       accept: "application/json",
     });
 
-    const response = await this.client.send(command);
+    const response = await client.send(command);
     const responseBody = JSON.parse(new TextDecoder().decode(response.body));
     const resultText = this.extractResponse(responseBody);
     return parseJsonResponse(resultText);
@@ -577,6 +693,8 @@ class BedrockProvider implements LLMProvider {
       return;
     }
 
+    const client = await this.getClient();
+    const { InvokeModelWithResponseStreamCommand } = await this.getBedrockSdk();
     const { system, messages: converted } = this.buildAnthropicMessages(messages);
     const requestBody = JSON.stringify({
       anthropic_version: "bedrock-2023-05-31",
@@ -591,7 +709,7 @@ class BedrockProvider implements LLMProvider {
       contentType: "application/json",
     });
 
-    const response = await this.client.send(command);
+    const response = await client.send(command);
     if (response.body) {
       for await (const event of response.body) {
         if (event.chunk?.bytes) {
@@ -651,6 +769,9 @@ export function parseJsonResponse(text: string): ActionDecision {
 export function getLlmProvider(): LLMProvider {
   if (Config.LLM_PROVIDER === "bedrock") {
     return new BedrockProvider();
+  }
+  if (Config.LLM_PROVIDER === "triton") {
+    return new TritonProvider();
   }
   if (Config.LLM_PROVIDER === "openrouter") {
     return new OpenRouterProvider();

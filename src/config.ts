@@ -57,7 +57,7 @@ export const Config = {
   // Streaming responses
   STREAMING_ENABLED: env("STREAMING_ENABLED", String(DEFAULT_STREAMING_ENABLED)) === "true",
 
-  // LLM Provider: "groq", "openai", "bedrock", "openrouter", or "ollama"
+  // LLM Provider: "groq", "openai", "bedrock", "openrouter", "ollama", or "triton"
   LLM_PROVIDER: env("LLM_PROVIDER", "groq"),
 
   // Groq Configuration
@@ -80,12 +80,22 @@ export const Config = {
   OLLAMA_BASE_URL: env("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
   OLLAMA_MODEL: env("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL),
 
+  // Triton/vLLM custom endpoint (Qwen or other non-OpenAI schema)
+  TRITON_BASE_URL: env("TRITON_BASE_URL"),
+  TRITON_MODEL: env("TRITON_MODEL", "qwen_vllm"),
+  TRITON_API_KEY: env("TRITON_API_KEY"),
+  TRITON_INSECURE_TLS: env("TRITON_INSECURE_TLS", "false") === "true",
+  TRITON_MAX_TOKENS: parseInt(env("TRITON_MAX_TOKENS", "1024"), 10),
+  TRITON_TEMPERATURE: parseFloat(env("TRITON_TEMPERATURE", "0.1")),
+  TRITON_TOP_P: parseFloat(env("TRITON_TOP_P", "0.9")),
+
   getModel(): string {
     const provider = Config.LLM_PROVIDER;
     if (provider === "groq") return Config.GROQ_MODEL;
     if (provider === "bedrock") return Config.BEDROCK_MODEL;
     if (provider === "openrouter") return Config.OPENROUTER_MODEL;
     if (provider === "ollama") return Config.OLLAMA_MODEL;
+    if (provider === "triton") return Config.TRITON_MODEL;
     return Config.OPENAI_MODEL;
   },
 
@@ -99,6 +109,9 @@ export const Config = {
     }
     if (provider === "openrouter" && !Config.OPENROUTER_API_KEY) {
       throw new Error("OPENROUTER_API_KEY is required when using OpenRouter provider");
+    }
+    if (provider === "triton" && !Config.TRITON_BASE_URL) {
+      throw new Error("TRITON_BASE_URL is required when using Triton provider");
     }
     // Bedrock uses AWS credential chain, no explicit validation needed
   },
